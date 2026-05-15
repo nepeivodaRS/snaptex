@@ -22,6 +22,9 @@ struct SettingsView: View {
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(AppTheme.windowBackground)
+        .tint(AppTheme.primaryButtonBackground)
+        .preferredColorScheme(.dark)
         .modelDownloadAlert(model: model)
         .modelDeletionAlert(model: model)
     }
@@ -35,6 +38,10 @@ struct SettingsView: View {
                     isSelected: model.settings.modelVariant == variant,
                     action: {
                         model.selectModelVariant(variant)
+                    },
+                    canRevealFiles: model.canRevealModelFiles(variant),
+                    revealAction: {
+                        model.revealModelFilesInFinder(variant)
                     },
                     deleteAction: {
                         model.requestModelDeletion(variant)
@@ -132,20 +139,20 @@ struct SettingsView: View {
                 } label: {
                     Label("Clear", systemImage: "trash")
                 }
+                .buttonStyle(GraphiteSecondaryButtonStyle())
                 .disabled(model.logs.isEmpty)
             }
 
             TextEditor(text: $model.logs)
                 .font(.system(.caption, design: .monospaced))
                 .scrollContentBackground(.hidden)
-                .background(.quaternary.opacity(0.18))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(AppTheme.insetBackground)
+                .graphitePanel(background: AppTheme.insetBackground)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(.quaternary.opacity(0.18))
-        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .graphitePanel(background: AppTheme.panelBackground)
     }
 
     private var historyLimitBinding: Binding<Int> {
@@ -202,6 +209,8 @@ private struct ModelManagementRow: View {
     let state: ManagedModelState
     let isSelected: Bool
     let action: () -> Void
+    let canRevealFiles: Bool
+    let revealAction: () -> Void
     let deleteAction: () -> Void
 
     var body: some View {
@@ -230,7 +239,16 @@ private struct ModelManagementRow: View {
                 Text(buttonTitle)
                     .frame(width: 70)
             }
+            .buttonStyle(GraphiteSecondaryButtonStyle())
             .disabled(state.isDownloading || (state.isInstalled && isSelected))
+
+            Button(action: revealAction) {
+                Image(systemName: "folder")
+                    .frame(width: 18)
+            }
+            .buttonStyle(.borderless)
+            .disabled(!canRevealFiles || state.isDownloading)
+            .help("Reveal local \(variant.title) model files in Finder")
 
             Button(role: .destructive, action: deleteAction) {
                 Image(systemName: "trash")
@@ -292,8 +310,7 @@ private struct SettingsSection<Content: View>: View {
             }
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(.quaternary.opacity(0.18))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .graphitePanel(background: AppTheme.panelBackground)
         }
     }
 }

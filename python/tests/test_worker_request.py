@@ -1,4 +1,6 @@
+import contextlib
 import json
+import types
 from pathlib import Path
 import tempfile
 import unittest
@@ -28,6 +30,41 @@ class FakeEngine:
             "model": model_name,
             "mode": mode,
         }
+
+
+class FakeTensor:
+    def __init__(self, batch_size=1):
+        self.batch_size = batch_size
+
+    def unsqueeze(self, _dimension):
+        return self
+
+    def to(self, _device):
+        return self
+
+    def dim(self):
+        return 4
+
+    def repeat(self, batch_size, *_repeats):
+        return FakeTensor(batch_size)
+
+
+class FakeProcessor:
+    def __call__(self, _image):
+        return FakeTensor()
+
+
+class FakeModel:
+    def __init__(self):
+        self.calls = []
+
+    def generate(self, payload, **kwargs):
+        image = payload["image"]
+        batch_size = image.batch_size
+        self.calls.append({"batch_size": batch_size, "kwargs": kwargs})
+        if kwargs.get("do_sample"):
+            return {"pred_str": [f"sampled-{index}" for index in range(batch_size)]}
+        return {"pred_str": ["deterministic"]}
 
 
 class WorkerRequestTests(unittest.TestCase):
@@ -85,6 +122,27 @@ class WorkerRequestTests(unittest.TestCase):
         self.assertTrue(payload["model"]["load_pretrained"])
         self.assertFalse(payload["model"]["load_finetuned"])
         self.assertEqual(str(model_file), payload["model"]["pretrained"])
+
+    def test_accurate_mode_generates_sampled_passes_as_one_batch(self):
+        image = Image.new("RGB", (8, 8), "white")
+        with tempfile.NamedTemporaryFile(suffix=".png") as handle:
+            image.save(handle.name)
+            model = FakeModel()
+            engine = object.__new__(UniMEREngine)
+            engine.device = "cpu"
+            engine.torch = types.SimpleNamespace(inference_mode=contextlib.nullcontext)
+            engine._load_model = lambda _model_name, _log_verbosity: (model, FakeProcessor())
+
+            result = engine.predict(handle.name, "tiny", "accurate", True)
+
+        self.assertEqual(["deterministic", "sampled-0", "sampled-1"], result["alternatives"])
+        self.assertEqual(2, len(model.calls))
+        self.assertEqual({"do_sample": False}, model.calls[0]["kwargs"])
+        self.assertEqual(1, model.calls[0]["batch_size"])
+        self.assertEqual(2, model.calls[1]["batch_size"])
+        self.assertTrue(model.calls[1]["kwargs"]["do_sample"])
+        self.assertGreater(model.calls[1]["kwargs"]["temperature"], 0)
+        self.assertGreater(model.calls[1]["kwargs"]["top_p"], 0)
 
 
 if __name__ == "__main__":

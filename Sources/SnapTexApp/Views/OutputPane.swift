@@ -11,8 +11,8 @@ struct OutputPane: View {
                     .font(.headline)
                 Spacer()
                 OutputFormatMenu(
-                    selection: $model.settings.outputFormat,
-                    isDisabled: model.latexOutput.isEmpty || model.isProcessing
+                    selection: outputFormatSelection,
+                    isDisabled: !model.canChangeOutputFormat
                 )
             }
             .frame(maxWidth: .infinity)
@@ -23,8 +23,8 @@ struct OutputPane: View {
                     design: model.settings.latexEditorFontFamily.swiftUIDesign
                 ))
                 .scrollContentBackground(.hidden)
-                .background(.quaternary.opacity(0.18))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(AppTheme.insetBackground)
+                .graphitePanel(background: AppTheme.insetBackground)
                 .frame(maxWidth: .infinity, minHeight: 160)
 
             VStack(alignment: .leading, spacing: 10) {
@@ -33,8 +33,12 @@ struct OutputPane: View {
 
                 if model.alternatives.isEmpty {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(.quaternary.opacity(0.18))
+                        .fill(AppTheme.insetBackground)
                         .frame(height: 86)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(AppTheme.border, lineWidth: 1)
+                        }
                         .overlay {
                             Image(systemName: "text.badge.plus")
                                 .font(.system(size: 26))
@@ -46,7 +50,7 @@ struct OutputPane: View {
                             AlternativeRow(alternative: alternative) {
                                 model.applyAlternative(alternative)
                             }
-                            .disabled(model.isProcessing)
+                            .disabled(!model.canApplyAlternatives)
                         }
                     }
                 }
@@ -55,6 +59,14 @@ struct OutputPane: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .padding(AppLayoutMetrics.outputPaneContentPadding)
+        .background(AppTheme.windowBackground)
+    }
+
+    private var outputFormatSelection: Binding<LaTeXOutputFormat> {
+        Binding(
+            get: { model.currentOutputFormat },
+            set: { model.setCurrentOutputFormat($0) }
+        )
     }
 }
 
@@ -82,8 +94,12 @@ private struct OutputFormatMenu: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 12)
             .frame(width: 145, height: 28)
-            .background(.quaternary.opacity(0.18))
+            .background(AppTheme.controlBackground)
             .clipShape(RoundedRectangle(cornerRadius: 7))
+            .overlay {
+                RoundedRectangle(cornerRadius: 7)
+                    .strokeBorder(AppTheme.border, lineWidth: 1)
+            }
             .opacity(isDisabled ? 0.55 : 1)
         }
         .disabled(isDisabled)
@@ -119,8 +135,7 @@ private struct AlternativeRow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(9)
-            .background(.quaternary.opacity(0.18))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .graphitePanel(background: AppTheme.raisedPanelBackground, radius: 6)
         }
         .buttonStyle(.plain)
         .help("Replace the editor contents with this alternative")

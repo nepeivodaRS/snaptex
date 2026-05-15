@@ -86,7 +86,9 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         latexEditorFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .latexEditorFontSize) ?? defaults.latexEditorFontSize)
         latexEditorFontFamily = try container.decodeIfPresent(LaTeXEditorFontFamily.self, forKey: .latexEditorFontFamily) ?? defaults.latexEditorFontFamily
         logVerbosity = try container.decodeIfPresent(LogVerbosity.self, forKey: .logVerbosity) ?? defaults.logVerbosity
-        workerScriptPath = try container.decodeIfPresent(String.self, forKey: .workerScriptPath) ?? defaults.workerScriptPath
+        workerScriptPath = Self.resolvedWorkerScriptPath(
+            savedPath: try container.decodeIfPresent(String.self, forKey: .workerScriptPath) ?? defaults.workerScriptPath
+        )
         snipShortcut = try container.decodeIfPresent(GlobalKeyboardShortcut.self, forKey: .snipShortcut) ?? defaults.snipShortcut
     }
 
@@ -162,6 +164,33 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         }
 
         return relativePath
+    }
+
+    public static func resolvedWorkerScriptPath(
+        savedPath: String,
+        fileManager: FileManager = .default,
+        resourceDirectory: URL? = Bundle.main.resourceURL
+    ) -> String {
+        let trimmedPath = savedPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        let defaultPath = defaultWorkerScriptPath(
+            fileManager: fileManager,
+            resourceDirectory: resourceDirectory
+        )
+
+        guard !trimmedPath.isEmpty else {
+            return defaultPath
+        }
+
+        if fileManager.fileExists(atPath: trimmedPath) {
+            return trimmedPath
+        }
+
+        if trimmedPath.contains("python/unimer_latex_ocr/worker.py")
+            || trimmedPath.contains("python/snaptex_worker/worker.py") {
+            return defaultPath
+        }
+
+        return trimmedPath
     }
 
     public static func defaultCondaPath(

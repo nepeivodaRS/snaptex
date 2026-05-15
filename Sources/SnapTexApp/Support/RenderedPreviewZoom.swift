@@ -14,6 +14,10 @@ enum RenderedPreviewZoom {
         max(minimumFontSize, fontSize - step)
     }
 
+    static func clamped(_ fontSize: Int) -> Int {
+        min(maximumFontSize, max(minimumFontSize, fontSize))
+    }
+
     static func percent(for fontSize: Int) -> Int {
         Int((Double(fontSize) / Double(defaultFontSize) * 100).rounded())
     }

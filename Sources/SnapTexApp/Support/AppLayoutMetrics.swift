@@ -1,9 +1,9 @@
 import Foundation
 
 enum AppLayoutMetrics {
-    static let historyPaneMinWidth: CGFloat = 220
-    static let historyPaneIdealWidth: CGFloat = 260
-    static let historyPaneMaxWidth: CGFloat = 340
+    static let historyPaneMinWidth: CGFloat = 280
+    static let historyPaneIdealWidth: CGFloat = 360
+    static let historyPaneMaxWidth: CGFloat = 620
     static let capturePaneMinWidth: CGFloat = 500
     static let capturePaneIdealWidth: CGFloat = 520
     static let outputPaneMinWidth: CGFloat = 360

@@ -4,8 +4,9 @@ set -euo pipefail
 MODE="${1:-run}"
 APP_NAME="snaptex"
 PRODUCT_NAME="snaptex"
-BUNDLE_ID="${SNAPTEX_BUNDLE_ID:-dev.snaptex.app}"
 ALLOW_BUNDLE_ID_MISMATCH="${SNAPTEX_ALLOW_BUNDLE_ID_MISMATCH:-0}"
+ALLOW_ADHOC_SIGNING="${SNAPTEX_ALLOW_ADHOC_SIGNING:-0}"
+DEFAULT_SIGNING_IDENTITY="${SNAPTEX_DEFAULT_SIGNING_IDENTITY:-rnepeiv Local Development}"
 MIN_SYSTEM_VERSION="13.0"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -21,6 +22,22 @@ ICON_SOURCE="$ROOT_DIR/Sources/SnapTexApp/Resources/logo.png"
 MATHJAX_SOURCE="$ROOT_DIR/Sources/SnapTexApp/Resources/MathJax.js"
 PYTHON_SOURCE="$ROOT_DIR/python/snaptex_worker"
 
+installed_bundle_id() {
+  if [[ -d "$INSTALL_BUNDLE" ]]; then
+    /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$INSTALL_BUNDLE/Contents/Info.plist" 2>/dev/null || true
+  fi
+}
+
+strip_quarantine() {
+  local path="$1"
+  if command -v xattr >/dev/null 2>&1; then
+    xattr -dr com.apple.quarantine "$path" >/dev/null 2>&1 || true
+  fi
+}
+
+EXISTING_BUNDLE_ID="$(installed_bundle_id)"
+BUNDLE_ID="${SNAPTEX_BUNDLE_ID:-${EXISTING_BUNDLE_ID:-dev.snaptex.app}}"
+
 signing_identity() {
   if [[ -n "${SNAPTEX_SIGN_IDENTITY:-}" ]]; then
     printf '%s\n' "$SNAPTEX_SIGN_IDENTITY"
@@ -29,7 +46,10 @@ signing_identity() {
 
   local identities
   identities="$(security find-identity -v -p codesigning 2>/dev/null || true)"
-  printf '%s\n' "$identities" | awk -F\" '/valid identities found/ { next } NF >= 2 { print $2; exit }'
+  if printf '%s\n' "$identities" | grep -Fq "\"$DEFAULT_SIGNING_IDENTITY\""; then
+    printf '%s\n' "$DEFAULT_SIGNING_IDENTITY"
+    return
+  fi
 }
 
 sign_app() {
@@ -68,6 +88,8 @@ if [[ -d "$PYTHON_SOURCE" ]]; then
   mkdir -p "$APP_RESOURCES/python"
   ditto "$PYTHON_SOURCE" "$APP_RESOURCES/python/snaptex_worker"
 fi
+
+strip_quarantine "$APP_BUNDLE"
 
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
@@ -119,22 +141,42 @@ install_app() {
 }
 
 SIGN_IDENTITY="$(signing_identity)"
-if [[ -n "$SIGN_IDENTITY" ]] && security find-identity -v -p codesigning | grep -Fq "\"$SIGN_IDENTITY\""; then
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  if [[ "$ALLOW_ADHOC_SIGNING" != "1" ]]; then
+    echo "Refusing ad-hoc signing because it makes macOS permissions reset after rebuilds." >&2
+    echo "Set SNAPTEX_ALLOW_ADHOC_SIGNING=1 only for throwaway builds." >&2
+    exit 1
+  fi
+  codesign --force --deep --timestamp=none --sign - "$APP_BUNDLE" >/dev/null
+  echo "warning: used explicit ad-hoc signing; macOS permissions may need to be regranted after rebuilds" >&2
+elif [[ -n "$SIGN_IDENTITY" ]] && security find-identity -v -p codesigning | grep -Fq "\"$SIGN_IDENTITY\""; then
   echo "signing with identity: $SIGN_IDENTITY"
   if ! sign_app "$APP_BUNDLE" "$SIGN_IDENTITY"; then
-    echo "warning: code-signing identity failed; used ad-hoc signing" >&2
-    codesign --force --deep --timestamp=none --sign - "$APP_BUNDLE" >/dev/null
+    echo "Code signing failed with identity: $SIGN_IDENTITY" >&2
+    echo "See $DIST_DIR/codesign.log for details." >&2
+    echo "Not falling back to ad-hoc signing because it makes macOS permissions reset after rebuilds." >&2
+    exit 1
   fi
 else
-  codesign --force --deep --timestamp=none --sign - "$APP_BUNDLE" >/dev/null
-  echo "warning: no matching code-signing identity found; used ad-hoc signing" >&2
+  if [[ "$ALLOW_ADHOC_SIGNING" == "1" ]]; then
+    codesign --force --deep --timestamp=none --sign - "$APP_BUNDLE" >/dev/null
+    echo "warning: no matching code-signing identity found; used explicit ad-hoc signing" >&2
+  else
+    echo "No matching code-signing identity found." >&2
+    echo "Expected: $DEFAULT_SIGNING_IDENTITY" >&2
+    echo "Create/select that stable local signing identity or set SNAPTEX_SIGN_IDENTITY." >&2
+    echo "Not falling back to ad-hoc signing because it makes macOS permissions reset after rebuilds." >&2
+    exit 1
+  fi
 fi
 
 install_app
+strip_quarantine "$INSTALL_BUNDLE"
+codesign --verify --deep --strict "$INSTALL_BUNDLE" >/dev/null
 /usr/bin/touch "$INSTALL_BUNDLE"
 
 open_app() {
-  /usr/bin/open -n "$INSTALL_BUNDLE"
+  /usr/bin/open "$INSTALL_BUNDLE"
 }
 
 case "$MODE" in

@@ -9,10 +9,15 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             ToolbarView(model: model)
-                .padding(.vertical, AppLayoutMetrics.toolbarVerticalPadding)
+                .padding(.vertical, 10)
                 .padding(.leading, AppLayoutMetrics.toolbarLeadingPadding)
                 .padding(.trailing, AppLayoutMetrics.outputPaneContentPadding)
-            Divider()
+                .background(AppTheme.windowBackground)
+                .overlay(alignment: .bottom) {
+                    Rectangle()
+                        .fill(AppTheme.border)
+                        .frame(height: 1)
+                }
             HSplitView {
                 HistorySidebarView(model: model)
                     .frame(
@@ -29,6 +34,9 @@ struct ContentView: View {
                     .frame(minWidth: AppLayoutMetrics.outputPaneMinWidth)
             }
         }
+        .background(AppTheme.windowBackground)
+        .tint(AppTheme.primaryButtonBackground)
+        .preferredColorScheme(.dark)
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             model.refreshPasteAvailability()
         }
@@ -51,6 +59,7 @@ private struct ToolbarView: View {
             } label: {
                 Label("Paste", systemImage: "doc.on.clipboard")
             }
+            .buttonStyle(GraphiteSecondaryButtonStyle())
             .disabled(model.isSnipping || !model.canPasteImage)
             .help("Run OCR on an image from the clipboard")
 
@@ -59,6 +68,7 @@ private struct ToolbarView: View {
             } label: {
                 Label("Retry", systemImage: "arrow.clockwise")
             }
+            .buttonStyle(GraphiteSecondaryButtonStyle())
             .disabled(!model.canRetry)
             .help("Run OCR again on the last input")
 
@@ -67,15 +77,19 @@ private struct ToolbarView: View {
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
             }
+            .buttonStyle(GraphiteSecondaryButtonStyle())
             .disabled(!model.canCopy)
             .help("Copy visible LaTeX")
 
-            Divider()
+            Rectangle()
+                .fill(AppTheme.border)
                 .frame(height: 26)
+                .frame(width: 1)
 
             HStack(spacing: 6) {
                 Text("OCR model")
                     .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .frame(width: AppLayoutMetrics.toolbarModelLabelWidth, alignment: .leading)
                 Picker("OCR model", selection: modelSelection) {
@@ -86,12 +100,14 @@ private struct ToolbarView: View {
                 .labelsHidden()
                 .pickerStyle(.segmented)
                 .frame(width: 210)
+                .disabled(!model.canChangeRecognitionSettings)
                 .help("Choose which UniMERNet model size to use")
             }
 
             HStack(spacing: 6) {
                 Text("OCR passes")
                     .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .frame(width: AppLayoutMetrics.toolbarPassesLabelWidth, alignment: .leading)
                 Picker("OCR passes", selection: $model.settings.recognitionMode) {
@@ -102,6 +118,7 @@ private struct ToolbarView: View {
                 .labelsHidden()
                 .pickerStyle(.segmented)
                 .frame(width: 120)
+                .disabled(!model.canChangeRecognitionSettings)
             }
 
             Spacer()
@@ -118,12 +135,12 @@ private struct ToolbarView: View {
                 }
             }
 
-            if model.isProcessing {
+            if model.isCurrentItemRecognizing {
                 ProgressView()
                     .controlSize(.small)
             }
             if model.activeModelDownload == nil {
-                Text(model.status)
+                Text(model.toolbarStatusText)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -160,10 +177,10 @@ private struct SnipButton: View {
     var body: some View {
         if model.isSnipping {
             button
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(GraphitePrimaryButtonStyle())
         } else {
             button
-                .buttonStyle(.bordered)
+                .buttonStyle(GraphitePrimaryButtonStyle())
         }
     }
 

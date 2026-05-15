@@ -35,6 +35,8 @@ LOG_VERBOSITY_RANKS = {
     "verbose": 1,
     "debug": 2,
 }
+SAMPLED_PASS_TEMPERATURE = 0.85
+SAMPLED_PASS_TOP_P = 0.95
 
 
 def json_response(payload):
@@ -70,6 +72,31 @@ def unique(values):
             seen.add(value)
             result.append(value)
     return result
+
+
+def prediction_strings(output):
+    predictions = output.get("pred_str", [])
+    if isinstance(predictions, str):
+        return [predictions]
+    return list(predictions)
+
+
+def repeat_image_batch(image, batch_size):
+    if batch_size <= 1:
+        return image
+    return image.repeat(batch_size, *([1] * (image.dim() - 1)))
+
+
+def generate_sampled(model, payload):
+    try:
+        return model.generate(
+            payload,
+            do_sample=True,
+            temperature=SAMPLED_PASS_TEMPERATURE,
+            top_p=SAMPLED_PASS_TOP_P,
+        )
+    except TypeError:
+        return model.generate(payload, do_sample=True)
 
 
 def image_with_light_background(image):
@@ -216,16 +243,29 @@ class UniMEREngine:
         worker_log(log_verbosity, "verbose", f"generation passes={passes}")
 
         predictions = []
-        for index in range(passes):
-            worker_log(log_verbosity, "debug", f"generation pass {index + 1}/{passes}: processor start")
-            image = processor(raw_image).unsqueeze(0).to(self.device)
-            worker_log(log_verbosity, "debug", f"generation pass {index + 1}/{passes}: model.generate start")
+        inference_mode = getattr(self.torch, "inference_mode", contextlib.nullcontext)
+        worker_log(log_verbosity, "debug", "generation pass 1: processor start")
+        image = processor(raw_image).unsqueeze(0).to(self.device)
+        with inference_mode():
+            worker_log(log_verbosity, "debug", "generation pass 1: greedy model.generate start")
             output = model.generate({"image": image}, do_sample=False)
-            prediction = output["pred_str"][0]
-            predictions.append(prediction)
+            predictions.extend(prediction_strings(output))
+
+            sampled_passes = passes - 1
+            if sampled_passes > 0:
+                worker_log(
+                    log_verbosity,
+                    "debug",
+                    f"generation sampled batch: passes={sampled_passes}, temperature={SAMPLED_PASS_TEMPERATURE}, top_p={SAMPLED_PASS_TOP_P}",
+                )
+                sampled_image = repeat_image_batch(image, sampled_passes)
+                output = generate_sampled(model, {"image": sampled_image})
+                predictions.extend(prediction_strings(output))
+
+        for index, prediction in enumerate(predictions[:passes]):
             worker_log(log_verbosity, "debug", f"generation pass {index + 1}/{passes}: prediction={prediction[:160]}")
 
-        alternatives = unique(predictions)
+        alternatives = unique(predictions[:passes])
         worker_log(log_verbosity, "verbose", f"predict complete: alternatives={len(alternatives)}")
         return {
             "ok": True,

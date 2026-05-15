@@ -9,7 +9,7 @@ struct SnapTexApp: App {
     @StateObject private var model = AppModel()
 
     var body: some Scene {
-        WindowGroup("snaptex", id: "main") {
+        Window("snaptex", id: "main") {
             ContentView(model: model)
                 .frame(
                     minWidth: AppLayoutMetrics.mainWindowMinWidth,
@@ -43,11 +43,6 @@ struct SnapTexApp: App {
             }
         }
 
-        Window("Settings", id: "settings") {
-            SettingsView(model: model)
-                .frame(minWidth: 780, idealWidth: 900, minHeight: 520, idealHeight: 640)
-        }
-
         MenuBarExtra {
             Button("Open snaptex") {
                 openMainWindow()
@@ -72,15 +67,18 @@ struct SnapTexApp: App {
     }
 
     private func openMainWindow() {
+        guard !bringWindowToFront(titled: "snaptex") else {
+            return
+        }
+
         openWindow(id: "main")
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            bringWindowToFront(titled: "snaptex")
+        }
     }
 
     private func openSettingsWindow() {
-        openWindow(id: "settings")
-        NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        SettingsWindowPresenter.show(model: model)
     }
 }
 
@@ -96,11 +94,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.applicationIconImage = icon
         }
         NSApp.setActivationPolicy(.regular)
-        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            bringWindowToFront(titled: "snaptex")
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        NSApp.setActivationPolicy(.regular)
+        if !flag {
+            if !bringWindowToFront(titled: "snaptex") {
+                sender.windows.first(where: { $0.canBecomeMain })?.makeKeyAndOrderFront(nil)
+            }
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        return true
     }
 
     func configure(model: AppModel) {
@@ -130,4 +141,62 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
     }
+}
+
+@discardableResult
+@MainActor
+private func bringWindowToFront(titled title: String) -> Bool {
+    guard let window = NSApp.windows.first(where: { $0.title == title && $0.canBecomeMain }) else {
+        NSApp.setActivationPolicy(.regular)
+        NSApp.activate(ignoringOtherApps: true)
+        return false
+    }
+
+    NSApp.setActivationPolicy(.regular)
+    if window.isMiniaturized {
+        window.deminiaturize(nil)
+    }
+    window.makeKeyAndOrderFront(nil)
+    NSApp.activate(ignoringOtherApps: true)
+    return true
+}
+
+@MainActor
+enum SettingsWindowPresenter {
+    private static var window: NSWindow?
+
+    static func show(model: AppModel) {
+        if let window {
+            bring(window)
+            return
+        }
+
+        let hostingController = NSHostingController(
+            rootView: SettingsView(model: model)
+                .frame(minWidth: 780, idealWidth: 900, minHeight: 520, idealHeight: 640)
+        )
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Settings"
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.setContentSize(NSSize(width: 900, height: 640))
+        window.isReleasedWhenClosed = false
+        self.window = window
+        bring(window)
+    }
+
+    private static func bring(_ window: NSWindow) {
+        NSApp.setActivationPolicy(.regular)
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        }
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    #if DEBUG
+    static func closeForTesting() {
+        window?.close()
+        window = nil
+    }
+    #endif
 }

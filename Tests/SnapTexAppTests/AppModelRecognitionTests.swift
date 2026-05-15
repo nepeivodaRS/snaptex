@@ -32,6 +32,159 @@ final class AppModelRecognitionTests: XCTestCase {
         XCTAssertEqual("x + y", model.latexOutput)
     }
 
+    func testChangingOutputFormatForHistoryEntryPersistsWhenReopened() throws {
+        let model = AppModel()
+        let defaultOutputFormat = model.settings.outputFormat
+        let entry = OCRHistoryEntry(
+            id: UUID(),
+            title: "x + y",
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .small,
+            mode: .balanced,
+            image: NSImage(size: NSSize(width: 8, height: 8)),
+            imageFingerprint: "selected-image",
+            state: .recognized
+        )
+
+        model.history = [entry]
+        model.reopenHistoryEntry(entry)
+        model.setCurrentOutputFormat(.displayMath)
+
+        XCTAssertEqual(.displayMath, try XCTUnwrap(model.history.first).outputFormat)
+        model.reopenHistoryEntry(entry)
+
+        XCTAssertEqual("$$x + y$$", model.latexOutput)
+        XCTAssertEqual(.displayMath, model.currentOutputFormat)
+        XCTAssertEqual(defaultOutputFormat, model.settings.outputFormat)
+    }
+
+    func testOutputFormatCanChangeForRecognizedHistoryWhileAnotherItemRecognizes() {
+        let model = AppModel()
+        let recognized = OCRHistoryEntry(
+            id: UUID(),
+            title: "x + y",
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .small,
+            mode: .balanced,
+            image: NSImage(size: NSSize(width: 8, height: 8)),
+            imageFingerprint: "recognized-image",
+            state: .recognized
+        )
+        let recognizing = OCRHistoryEntry(
+            id: UUID(),
+            title: "Recognizing...",
+            timestamp: Date(),
+            latex: "",
+            rawPrediction: "",
+            alternatives: [],
+            model: .small,
+            mode: .accurate,
+            image: NSImage(size: NSSize(width: 8, height: 8)),
+            imageFingerprint: "recognizing-image",
+            state: .recognizing
+        )
+
+        model.history = [recognizing, recognized]
+        model.isProcessing = true
+        model.reopenHistoryEntry(recognized)
+
+        XCTAssertTrue(model.canChangeOutputFormat)
+
+        model.setCurrentOutputFormat(.displayMath)
+
+        XCTAssertEqual("$$x + y$$", model.latexOutput)
+        XCTAssertEqual(.displayMath, model.currentOutputFormat)
+    }
+
+    func testRecognizedHistoryCanBeRetriedWhileAnotherItemRecognizes() {
+        let model = AppModel()
+        let recognized = OCRHistoryEntry(
+            id: UUID(),
+            title: "x + y",
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .small,
+            mode: .balanced,
+            image: NSImage(size: NSSize(width: 8, height: 8)),
+            imageFingerprint: "recognized-image",
+            state: .recognized
+        )
+        let recognizing = OCRHistoryEntry(
+            id: UUID(),
+            title: "Recognizing...",
+            timestamp: Date(),
+            latex: "",
+            rawPrediction: "",
+            alternatives: [],
+            model: .small,
+            mode: .accurate,
+            image: NSImage(size: NSSize(width: 8, height: 8)),
+            imageFingerprint: "recognizing-image",
+            state: .recognizing
+        )
+
+        model.history = [recognizing, recognized]
+        model.isProcessing = true
+        model.reopenHistoryEntry(recognized)
+
+        XCTAssertTrue(model.canRetry)
+        XCTAssertTrue(model.canChangeRecognitionSettings)
+        XCTAssertFalse(model.isCurrentItemRecognizing)
+    }
+
+    func testRecognizingHistoryItemLocksOnlyTheCurrentItem() {
+        let model = AppModel()
+        let recognized = OCRHistoryEntry(
+            id: UUID(),
+            title: "x + y",
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .small,
+            mode: .balanced,
+            image: NSImage(size: NSSize(width: 8, height: 8)),
+            imageFingerprint: "recognized-image",
+            state: .recognized
+        )
+        let recognizing = OCRHistoryEntry(
+            id: UUID(),
+            title: "Recognizing...",
+            timestamp: Date(),
+            latex: "",
+            rawPrediction: "",
+            alternatives: [],
+            model: .small,
+            mode: .accurate,
+            image: NSImage(size: NSSize(width: 8, height: 8)),
+            imageFingerprint: "recognizing-image",
+            state: .recognizing
+        )
+
+        model.history = [recognizing, recognized]
+        model.isProcessing = true
+
+        model.reopenHistoryEntry(recognizing)
+        XCTAssertFalse(model.canRetry)
+        XCTAssertFalse(model.canChangeRecognitionSettings)
+        XCTAssertTrue(model.isCurrentItemRecognizing)
+        XCTAssertEqual("Recognizing", model.toolbarStatusText)
+
+        model.reopenHistoryEntry(recognized)
+        XCTAssertTrue(model.canRetry)
+        XCTAssertTrue(model.canChangeRecognitionSettings)
+        XCTAssertFalse(model.isCurrentItemRecognizing)
+        XCTAssertEqual("Reopened history item", model.toolbarStatusText)
+    }
+
     func testPendingHistoryEntryIsInsertedBeforeRecognitionFinishes() {
         let model = AppModel()
 
@@ -57,6 +210,15 @@ final class AppModelRecognitionTests: XCTestCase {
         XCTAssertTrue(model.canStartSnip)
     }
 
+    func testOCRPassChangesDoNotChangeWorkerConfiguration() {
+        var settings = AppSettingsSnapshot.default
+        let workerConfiguration = AppModel.workerConfiguration(for: settings)
+
+        settings.recognitionMode = .accurate
+
+        XCTAssertEqual(workerConfiguration, AppModel.workerConfiguration(for: settings))
+    }
+
     func testRetryIsAvailableForSelectedHistoryEntryWithoutLastCaptureURL() {
         let model = AppModel()
         let entry = OCRHistoryEntry(
@@ -77,6 +239,55 @@ final class AppModelRecognitionTests: XCTestCase {
         model.reopenHistoryEntry(entry)
 
         XCTAssertTrue(model.canRetry)
+    }
+
+    func testRetryIsAvailableForSelectedHistoryEntryWithStoredImageURL() throws {
+        let model = AppModel()
+        let imageURL = try makeTemporaryImageFile()
+        defer {
+            try? FileManager.default.removeItem(at: imageURL)
+        }
+        let entry = OCRHistoryEntry(
+            id: UUID(),
+            title: "x + y",
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .small,
+            mode: .balanced,
+            image: nil,
+            imageURL: imageURL,
+            imageFingerprint: "selected-image",
+            state: .recognized
+        )
+
+        model.history = [entry]
+        model.reopenHistoryEntry(entry)
+
+        XCTAssertTrue(model.canRetry)
+    }
+
+    func testReopeningHistoryEntryTracksDisplayedModel() {
+        let model = AppModel()
+        let entry = OCRHistoryEntry(
+            id: UUID(),
+            title: "x + y",
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .base,
+            mode: .balanced,
+            image: NSImage(size: NSSize(width: 8, height: 8)),
+            imageFingerprint: "selected-image",
+            state: .recognized
+        )
+
+        model.history = [entry]
+        model.reopenHistoryEntry(entry)
+
+        XCTAssertEqual(.base, model.currentResultModel)
     }
 
     func testDeletingOnlySelectedHistoryEntryClearsDetailPanes() {
@@ -108,6 +319,138 @@ final class AppModelRecognitionTests: XCTestCase {
         XCTAssertEqual("", model.previewLatex)
         XCTAssertNil(model.previewIssue)
         XCTAssertNil(model.validationIssue)
+        XCTAssertNil(model.currentResultModel)
+    }
+
+    func testDeletingHistoryEntryRemovesOwnedImageFile() throws {
+        let model = AppModel()
+        let imageURL = try makeTemporaryImageFile()
+        defer {
+            try? FileManager.default.removeItem(at: imageURL)
+        }
+        let entry = OCRHistoryEntry(
+            id: UUID(),
+            title: "x + y",
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .small,
+            mode: .balanced,
+            image: nil,
+            imageURL: imageURL,
+            ownsImageFile: true,
+            imageFingerprint: "owned-image",
+            state: .recognized
+        )
+
+        model.history = [entry]
+        model.deleteHistoryEntry(entry)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: imageURL.path))
+    }
+
+    func testDeletingHistoryEntryLeavesExternalImageFile() throws {
+        let model = AppModel()
+        let imageURL = try makeTemporaryImageFile()
+        let entry = OCRHistoryEntry(
+            id: UUID(),
+            title: "x + y",
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .small,
+            mode: .balanced,
+            image: nil,
+            imageURL: imageURL,
+            ownsImageFile: false,
+            imageFingerprint: "external-image",
+            state: .recognized
+        )
+        defer {
+            try? FileManager.default.removeItem(at: imageURL)
+        }
+
+        model.history = [entry]
+        model.deleteHistoryEntry(entry)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: imageURL.path))
+    }
+
+    func testReplacingHistoryEntryRemovesOldOwnedImageFile() throws {
+        let model = AppModel()
+        let oldImageURL = try makeTemporaryImageFile()
+        let newImageURL = try makeTemporaryImageFile()
+        defer {
+            try? FileManager.default.removeItem(at: oldImageURL)
+            try? FileManager.default.removeItem(at: newImageURL)
+        }
+        model.history = [
+            OCRHistoryEntry(
+                id: UUID(),
+                title: "x + y",
+                timestamp: Date(),
+                latex: "x + y",
+                rawPrediction: "x + y",
+                alternatives: [],
+                model: .small,
+                mode: .balanced,
+                image: nil,
+                imageURL: oldImageURL,
+                ownsImageFile: true,
+                imageFingerprint: "same-image",
+                state: .recognized
+            )
+        ]
+
+        model.insertPendingHistoryEntry(
+            image: nil,
+            imageURL: newImageURL,
+            ownsImageFile: true,
+            imageFingerprint: "same-image",
+            mode: .balanced,
+            model: .base
+        )
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldImageURL.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: newImageURL.path))
+    }
+
+    func testTrimmingHistoryRemovesOwnedImageFiles() throws {
+        let model = AppModel()
+        model.settings.historyLimit = 4
+        let oldestImageURL = try makeTemporaryImageFile()
+        var imageURLs = [oldestImageURL]
+        defer {
+            for imageURL in imageURLs {
+                try? FileManager.default.removeItem(at: imageURL)
+            }
+        }
+
+        model.insertPendingHistoryEntry(
+            image: nil,
+            imageURL: oldestImageURL,
+            ownsImageFile: true,
+            imageFingerprint: "image-0",
+            mode: .balanced,
+            model: .small
+        )
+        for index in 1...4 {
+            let imageURL = try makeTemporaryImageFile()
+            imageURLs.append(imageURL)
+            model.insertPendingHistoryEntry(
+                image: nil,
+                imageURL: imageURL,
+                ownsImageFile: true,
+                imageFingerprint: "image-\(index)",
+                mode: .balanced,
+                model: .small
+            )
+        }
+
+        XCTAssertEqual(4, model.history.count)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: oldestImageURL.path))
     }
 
     func testSelectingMissingModelPromptsForDownload() throws {
@@ -127,6 +470,14 @@ final class AppModelRecognitionTests: XCTestCase {
         let url = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    private func makeTemporaryImageFile() throws -> URL {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("snaptex-test-\(UUID().uuidString)")
+            .appendingPathExtension("png")
+        try Data("image".utf8).write(to: url)
         return url
     }
 }

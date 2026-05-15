@@ -15,6 +15,11 @@ struct AppSettingsStore {
             return .default
         }
 
+        if let repairedData = try? JSONEncoder().encode(settings),
+           repairedData != data {
+            defaults.set(repairedData, forKey: key)
+        }
+
         return settings
     }
 

@@ -156,6 +156,40 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(.normal, settings.logVerbosity)
     }
 
+    func testDecodedSettingsRepairMissingLegacyWorkerScriptPath() throws {
+        let root = try makeTemporaryDirectory()
+        let bundledWorker = root
+            .appendingPathComponent("Resources")
+            .appendingPathComponent("python/snaptex_worker/worker.py")
+        try FileManager.default.createDirectory(
+            at: bundledWorker.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: bundledWorker.path, contents: Data())
+
+        let repairedPath = AppSettingsSnapshot.resolvedWorkerScriptPath(
+            savedPath: "/Applications/snaptex.app/Contents/Resources/python/unimer_latex_ocr/worker.py",
+            fileManager: .default,
+            resourceDirectory: root.appendingPathComponent("Resources")
+        )
+
+        XCTAssertEqual(bundledWorker.path, repairedPath)
+    }
+
+    func testDecodedSettingsPreserveExistingCustomWorkerScriptPath() throws {
+        let root = try makeTemporaryDirectory()
+        let customWorker = root.appendingPathComponent("worker.py")
+        FileManager.default.createFile(atPath: customWorker.path, contents: Data())
+
+        let repairedPath = AppSettingsSnapshot.resolvedWorkerScriptPath(
+            savedPath: customWorker.path,
+            fileManager: .default,
+            resourceDirectory: nil
+        )
+
+        XCTAssertEqual(customWorker.path, repairedPath)
+    }
+
     func testSettingsPersistLogVerbosity() throws {
         var settings = AppSettingsSnapshot.default
         settings.logVerbosity = .debug

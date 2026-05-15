@@ -45,6 +45,25 @@ final class AppModelModelManagementTests: XCTestCase {
         XCTAssertEqual(.missing, model.modelState(for: .tiny))
     }
 
+    func testCanRevealInstalledModelFiles() throws {
+        let root = try makeTemporaryDirectory()
+        let modelFile = root
+            .appendingPathComponent("models")
+            .appendingPathComponent("unimernet_tiny")
+            .appendingPathComponent("pytorch_model.pth")
+        try FileManager.default.createDirectory(
+            at: modelFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: modelFile.path, contents: Data())
+
+        let model = AppModel()
+        model.settings.uniMERNetPath = root.path
+
+        XCTAssertTrue(model.canRevealModelFiles(.tiny))
+        XCTAssertFalse(model.canRevealModelFiles(.base))
+    }
+
     private func waitFor(
         timeout: TimeInterval = 1,
         condition: @escaping @MainActor () -> Bool
