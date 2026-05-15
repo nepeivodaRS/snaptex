@@ -37,6 +37,15 @@ final class SettingsTests: XCTestCase {
 
     func testDefaultUniMERNetPathHonorsEnvironmentOverride() {
         let path = AppSettingsSnapshot.defaultUniMERNetPath(
+            environment: ["SNAPTEX_UNIMERNET_DIR": "~/snaptex/UniMERNet"],
+            homeDirectory: URL(fileURLWithPath: "/Users/example")
+        )
+
+        XCTAssertEqual("/Users/example/snaptex/UniMERNet", path)
+    }
+
+    func testDefaultUniMERNetPathHonorsLegacyEnvironmentOverride() {
+        let path = AppSettingsSnapshot.defaultUniMERNetPath(
             environment: ["UNIMERNET_DIR": "~/snaptex/UniMERNet"],
             homeDirectory: URL(fileURLWithPath: "/Users/example")
         )

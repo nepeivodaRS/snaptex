@@ -2,10 +2,10 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_NAME="${ENV_NAME:-snaptex}"
-MODEL_VARIANT="${MODEL_VARIANT:-small}"
+ENV_NAME="${SNAPTEX_ENV_NAME:-${ENV_NAME:-snaptex}}"
+MODEL_VARIANT="${SNAPTEX_MODEL_VARIANT:-${MODEL_VARIANT:-small}}"
 APP_SUPPORT_DIR="${SNAPTEX_APP_SUPPORT_DIR:-$HOME/Library/Application Support/snaptex}"
-UNIMERNET_DIR="${UNIMERNET_DIR:-$APP_SUPPORT_DIR/UniMERNet}"
+UNIMERNET_DIR="${SNAPTEX_UNIMERNET_DIR:-${UNIMERNET_DIR:-$APP_SUPPORT_DIR/UniMERNet}}"
 
 find_conda() {
   if [[ -n "${CONDA_EXE:-}" && -x "${CONDA_EXE:-}" ]]; then

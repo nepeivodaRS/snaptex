@@ -136,9 +136,11 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> String {
-        if let configured = environment["UNIMERNET_DIR"]?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !configured.isEmpty {
-            return expandTilde(in: configured, homeDirectory: homeDirectory)
+        for key in ["SNAPTEX_UNIMERNET_DIR", "UNIMERNET_DIR"] {
+            if let configured = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !configured.isEmpty {
+                return expandTilde(in: configured, homeDirectory: homeDirectory)
+            }
         }
 
         return homeDirectory
