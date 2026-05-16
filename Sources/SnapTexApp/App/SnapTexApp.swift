@@ -82,7 +82,8 @@ struct SnapTexApp: App {
             }
             .keyboardShortcut("q")
         } label: {
-            Image(systemName: "function")
+            Image(nsImage: MenuBarIconImage.make())
+            .accessibilityLabel("snaptex")
         }
         .menuBarExtraStyle(.menu)
     }

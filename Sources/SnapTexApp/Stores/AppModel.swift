@@ -37,9 +37,21 @@ final class AppModel: ObservableObject {
     @Published var alternatives: [LaTeXAlternative] = []
     @Published var previewLatex = ""
     @Published var previewIssue: LaTeXValidationIssue?
-    @Published var globalRenderedPreviewFontSize = RenderedPreviewZoom.defaultFontSize
-    @Published var history: [OCRHistoryEntry] = []
-    @Published var selectedHistoryID: OCRHistoryEntry.ID?
+    @Published var globalRenderedPreviewFontSize = RenderedPreviewZoom.defaultFontSize {
+        didSet {
+            saveHistoryState()
+        }
+    }
+    @Published var history: [OCRHistoryEntry] = [] {
+        didSet {
+            saveHistoryState()
+        }
+    }
+    @Published var selectedHistoryID: OCRHistoryEntry.ID? {
+        didSet {
+            saveHistoryState()
+        }
+    }
     @Published private(set) var currentResultModel: UniMERModelVariant?
     @Published var status = "Ready"
     @Published var logs = ""
@@ -49,13 +61,26 @@ final class AppModel: ObservableObject {
     @Published var validationIssue: LaTeXValidationIssue?
     @Published private(set) var installedModels: Set<UniMERModelVariant> = []
     @Published private(set) var modelDownloadStates: [UniMERModelVariant: ManagedModelState] = [:]
-    @Published var historyFolders: [HistoryFolder] = []
-    @Published var selectedHistoryScope: HistoryScope = .all
-    @Published var historySortMode: HistorySortMode = .time
+    @Published var historyFolders: [HistoryFolder] = [] {
+        didSet {
+            saveHistoryState()
+        }
+    }
+    @Published var selectedHistoryScope: HistoryScope = .all {
+        didSet {
+            saveHistoryState()
+        }
+    }
+    @Published var historySortMode: HistorySortMode = .time {
+        didSet {
+            saveHistoryState()
+        }
+    }
     @Published var pendingModelDownload: PendingModelDownload?
     @Published var pendingModelDeletion: PendingModelDeletion?
 
     private let settingsStore: AppSettingsStore
+    private let historyStore: AppHistoryStore
     private let screenshotService = ScreenshotService()
     private let modelDownloader: UniMERModelDownloading
     private lazy var worker = OCRWorkerClient(configuration: workerConfiguration)
@@ -68,16 +93,26 @@ final class AppModel: ObservableObject {
 
     init(
         settingsStore: AppSettingsStore = AppSettingsStore(),
+        historyStore: AppHistoryStore? = nil,
         modelDownloader: UniMERModelDownloading = UniMERModelDownloader()
     ) {
         self.settingsStore = settingsStore
+        self.historyStore = historyStore ?? AppHistoryStore.defaultStore(for: settingsStore)
         self.modelDownloader = modelDownloader
         self.settings = settingsStore.load()
+        let historyState = self.historyStore.load()
+        self.history = historyState.history
+        self.historyFolders = historyState.historyFolders
+        self.selectedHistoryID = historyState.selectedHistoryID
+        self.selectedHistoryScope = historyState.selectedHistoryScope
+        self.historySortMode = historyState.historySortMode
+        self.globalRenderedPreviewFontSize = historyState.globalRenderedPreviewFontSize
         worker.logHandler = { [weak self] message in
             Task { @MainActor in
                 self?.appendLog(message)
             }
         }
+        restoreSelectedHistoryDisplay()
         refreshModelStatuses()
         refreshPasteAvailability()
     }
@@ -1431,6 +1466,30 @@ final class AppModel: ObservableObject {
         previewUpdateTask?.cancel()
         previewLatex = ""
         previewIssue = nil
+    }
+
+    private func restoreSelectedHistoryDisplay() {
+        if let selectedHistoryID,
+           let entry = history.first(where: { $0.id == selectedHistoryID }),
+           isHistoryEntryVisible(entry) {
+            reopenHistoryEntry(entry)
+        } else {
+            reconcileSelectedHistoryWithCurrentScope()
+        }
+        status = "Ready"
+    }
+
+    private func saveHistoryState() {
+        historyStore.save(
+            AppHistoryStore.State(
+                history: history,
+                historyFolders: historyFolders,
+                selectedHistoryID: selectedHistoryID,
+                selectedHistoryScope: selectedHistoryScope,
+                historySortMode: historySortMode,
+                globalRenderedPreviewFontSize: globalRenderedPreviewFontSize
+            )
+        )
     }
 
     private func copyLatex(_ latex: String, updateStatus: Bool = true) {

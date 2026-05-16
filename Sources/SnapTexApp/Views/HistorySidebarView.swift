@@ -629,6 +629,8 @@ private struct HistoryRow: View {
     @State private var isRenaming = false
     @State private var draftTitle = ""
     @State private var isHovered = false
+    @State private var hoverLocation = CGPoint(x: 0.5, y: 0.5)
+    @State private var hoverEffectProgress = 0.0
     @FocusState private var titleFieldFocused: Bool
 
     var body: some View {
@@ -702,8 +704,23 @@ private struct HistoryRow: View {
             border: rowBorder,
             radius: 7
         )
-        .shadow(color: Color.black.opacity(isHovered || isSelected ? 0.12 : 0), radius: 5, y: 1)
-        .onHover { isHovered = $0 }
+        .modifier(HistoryDepthCardHoverEffect(
+            progress: hoverEffectProgress,
+            hoverLocation: hoverLocation,
+            cornerRadius: 7
+        ))
+        .shadow(
+            color: Color.black.opacity(shadowOpacity),
+            radius: 5 + hoverEffectProgress,
+            y: 1 + hoverEffectProgress
+        )
+        .overlay {
+            HistoryCardHoverTrackingArea(
+                hoverLocation: $hoverLocation,
+                isHovered: $isHovered
+            )
+        }
+        .onChange(of: isHovered) { updateHoverEffect(isActive: $0) }
         .contextMenu {
             Button("Rename", action: beginRename)
             Button("Copy", action: copy)
@@ -774,10 +791,18 @@ private struct HistoryRow: View {
     }
 
     private var rowBorder: Color {
+        let baseOpacity = max(1 - hoverEffectProgress, 0)
         if isSelected {
-            return AppTheme.selectedBorder
+            return AppTheme.selectedBorder.opacity(baseOpacity)
         }
-        return isHovered ? Color.white.opacity(0.13) : AppTheme.border.opacity(0.72)
+        return AppTheme.border.opacity(0.72 * baseOpacity)
+    }
+
+    private var shadowOpacity: Double {
+        if isSelected {
+            return 0.10 - (hoverEffectProgress * 0.02)
+        }
+        return 0.08 * hoverEffectProgress
     }
 
     private var thumbnail: some View {
@@ -806,6 +831,208 @@ private struct HistoryRow: View {
         }
         .contentShape(RoundedRectangle(cornerRadius: 5))
     }
+
+    private func updateHoverEffect(isActive: Bool) {
+        withAnimation(.easeInOut(duration: isActive ? 0.28 : 1.15)) {
+            hoverEffectProgress = isActive ? 1 : 0
+        }
+    }
+}
+
+private struct HistoryDepthCardHoverEffect: ViewModifier {
+    let progress: Double
+    let hoverLocation: CGPoint
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .rotation3DEffect(
+                .degrees(xTilt),
+                axis: (x: 1, y: 0, z: 0),
+                perspective: 0.68
+            )
+            .rotation3DEffect(
+                .degrees(yTilt),
+                axis: (x: 0, y: -1, z: 0),
+                perspective: 0.68
+            )
+            .scaleEffect(1 + progress * 0.006)
+            .offset(y: -progress)
+            .overlay { foilOverlay }
+            .overlay { depthBorder }
+            .animation(.spring(response: 0.78, dampingFraction: 0.72, blendDuration: 0.18), value: hoverLocation)
+    }
+
+    private var foilOverlay: some View {
+        GeometryReader { _ in
+            ZStack {
+                foilColorShift
+                foilBanding
+            }
+            .blendMode(.screen)
+            .saturation(1.20)
+            .contrast(1.10)
+            .brightness(-0.030)
+            .opacity(progress)
+            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .allowsHitTesting(false)
+        }
+    }
+
+    private var foilColorShift: some View {
+        AngularGradient(
+            colors: [
+                Color(red: 0.38, green: 0.74, blue: 1.00).opacity(0.070),
+                Color(red: 0.58, green: 0.52, blue: 0.94).opacity(0.064),
+                Color(red: 0.36, green: 0.72, blue: 0.86).opacity(0.048),
+                Color(red: 0.76, green: 0.58, blue: 0.92).opacity(0.056),
+                Color(red: 0.94, green: 0.58, blue: 0.44).opacity(0.038),
+                Color(red: 0.88, green: 0.76, blue: 0.36).opacity(0.032),
+                Color(red: 0.38, green: 0.74, blue: 1.00).opacity(0.070)
+            ],
+            center: UnitPoint(
+                x: clampedUnit(0.24 + hoverLocation.x * 0.52),
+                y: clampedUnit(0.24 + hoverLocation.y * 0.52)
+            )
+        )
+    }
+
+    private var foilBanding: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.38, green: 0.74, blue: 1.00).opacity(0.038),
+                Color(red: 0.58, green: 0.52, blue: 0.94).opacity(0.060),
+                Color(red: 0.36, green: 0.72, blue: 0.86).opacity(0.046),
+                Color(red: 0.76, green: 0.58, blue: 0.92).opacity(0.052),
+                Color(red: 0.94, green: 0.58, blue: 0.44).opacity(0.038),
+                Color(red: 0.88, green: 0.76, blue: 0.36).opacity(0.032)
+            ],
+            startPoint: UnitPoint(
+                x: hoverLocation.x - 0.86,
+                y: hoverLocation.y - 0.62
+            ),
+            endPoint: UnitPoint(
+                x: hoverLocation.x + 0.86,
+                y: hoverLocation.y + 0.66
+            )
+        )
+    }
+
+    private var depthBorder: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .stroke(borderGradient, lineWidth: 2.2)
+                .blur(radius: 1.4)
+                .opacity(0.06)
+
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(borderGradient, lineWidth: 1.1)
+                .opacity(0.36)
+        }
+        .opacity(progress)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .allowsHitTesting(false)
+    }
+
+    private var borderGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.clear,
+                AppTheme.snipAccent.opacity(0.30),
+                Color(red: 0.62, green: 0.70, blue: 1.00).opacity(0.28),
+                Color(red: 1.00, green: 0.72, blue: 0.58).opacity(0.12),
+                Color(red: 0.48, green: 0.95, blue: 0.82).opacity(0.22),
+                Color.clear
+            ],
+            startPoint: UnitPoint(
+                x: clampedUnit(hoverLocation.x - 0.28),
+                y: clampedUnit(hoverLocation.y - 0.46)
+            ),
+            endPoint: UnitPoint(
+                x: clampedUnit(hoverLocation.x + 0.42),
+                y: clampedUnit(hoverLocation.y + 0.52)
+            )
+        )
+    }
+
+    private var xTilt: Double {
+        Double((0.5 - hoverLocation.y) * 3.0 * progress)
+    }
+
+    private var yTilt: Double {
+        Double((hoverLocation.x - 0.5) * 3.8 * progress)
+    }
+}
+
+private struct HistoryCardHoverTrackingArea: NSViewRepresentable {
+    @Binding var hoverLocation: CGPoint
+    @Binding var isHovered: Bool
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.hoverLocation = $hoverLocation
+        view.isHovered = $isHovered
+        return view
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.hoverLocation = $hoverLocation
+        view.isHovered = $isHovered
+    }
+
+    final class TrackingView: NSView {
+        var hoverLocation: Binding<CGPoint>?
+        var isHovered: Binding<Bool>?
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            for trackingArea in trackingAreas {
+                removeTrackingArea(trackingArea)
+            }
+            addTrackingArea(
+                NSTrackingArea(
+                    rect: .zero,
+                    options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
+                    owner: self
+                )
+            )
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            isHovered?.wrappedValue = true
+            updateLocation(from: event)
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            updateLocation(from: event)
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            isHovered?.wrappedValue = false
+            hoverLocation?.wrappedValue = CGPoint(x: 0.5, y: 0.5)
+        }
+
+        private func updateLocation(from event: NSEvent) {
+            let point = convert(event.locationInWindow, from: nil)
+            guard bounds.width > 0, bounds.height > 0 else {
+                hoverLocation?.wrappedValue = CGPoint(x: 0.5, y: 0.5)
+                return
+            }
+
+            hoverLocation?.wrappedValue = CGPoint(
+                x: clampedUnit(point.x / bounds.width),
+                y: clampedUnit(1 - point.y / bounds.height)
+            )
+        }
+    }
+}
+
+private func clampedUnit(_ value: CGFloat) -> CGFloat {
+    min(max(value, 0), 1)
 }
 
 private struct HistoryFolderAssignmentMenu: View {

@@ -3,7 +3,11 @@ import SnapTexCore
 
 struct AppSettingsStore {
     private let key = "AppSettingsSnapshot"
-    private let defaults: UserDefaults
+    let defaults: UserDefaults
+
+    var usesStandardDefaults: Bool {
+        defaults === UserDefaults.standard
+    }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

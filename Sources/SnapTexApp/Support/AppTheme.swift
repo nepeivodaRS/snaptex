@@ -92,6 +92,7 @@ private struct LiquidSnipButtonBody: View {
     @Environment(\.isEnabled) private var isEnabled
     @State private var isHovered = false
     @State private var mouseLocation = CGPoint(x: 48, y: 16)
+    @State private var glowLocation = CGPoint(x: 48, y: 16)
 
     var body: some View {
         configuration.label
@@ -108,13 +109,13 @@ private struct LiquidSnipButtonBody: View {
                         if isHovered && isEnabled {
                             RadialGradient(
                                 colors: [
-                                    AppTheme.snipAccent.opacity(configuration.isPressed ? 0.28 : 0.22),
-                                    AppTheme.snipAccent.opacity(0.07),
+                                    AppTheme.snipAccent.opacity(configuration.isPressed ? 0.34 : 0.30),
+                                    AppTheme.snipAccent.opacity(0.12),
                                     Color.clear
                                 ],
                                 center: glowCenter(in: proxy.size),
                                 startRadius: 0,
-                                endRadius: max(proxy.size.width, proxy.size.height) * 1.18
+                                endRadius: max(proxy.size.width, proxy.size.height) * 1.55
                             )
                             .clipShape(RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius))
                         }
@@ -126,9 +127,9 @@ private struct LiquidSnipButtonBody: View {
                     .strokeBorder(border, lineWidth: 1)
             }
             .shadow(
-                color: AppTheme.snipAccent.opacity(isHovered && isEnabled ? 0.16 : 0),
-                radius: isHovered && isEnabled ? 10 : 0,
-                y: isHovered && isEnabled ? 2 : 0
+                color: AppTheme.snipAccent.opacity(isHovered && isEnabled ? 0.26 : 0),
+                radius: isHovered && isEnabled ? 16 : 0,
+                y: isHovered && isEnabled ? 3 : 0
             )
             .scaleEffect(configuration.isPressed ? 0.97 : isHovered && isEnabled ? 1.025 : 1)
             .offset(y: isHovered && isEnabled && !configuration.isPressed ? -1 : 0)
@@ -140,8 +141,15 @@ private struct LiquidSnipButtonBody: View {
                     isEnabled: isEnabled
                 )
             }
+            .onChange(of: mouseLocation) { updateGlowLocation($0) }
+            .onChange(of: isHovered) { isHovered in
+                guard isHovered else {
+                    return
+                }
+                updateGlowLocation(mouseLocation)
+            }
             .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.14), value: isHovered)
+            .animation(.easeInOut(duration: 0.32), value: isHovered)
     }
 
     private var foreground: Color {
@@ -171,7 +179,7 @@ private struct LiquidSnipButtonBody: View {
         if configuration.isPressed {
             return AppTheme.snipAccent.opacity(0.48)
         }
-        return isHovered ? AppTheme.snipAccent.opacity(0.34) : Color.white.opacity(0.12)
+        return isHovered ? AppTheme.snipAccent.opacity(0.42) : Color.white.opacity(0.12)
     }
 
     private func glowCenter(in size: CGSize) -> UnitPoint {
@@ -179,9 +187,15 @@ private struct LiquidSnipButtonBody: View {
             return .center
         }
         return UnitPoint(
-            x: min(max(mouseLocation.x / size.width, 0), 1),
-            y: min(max(1 - mouseLocation.y / size.height, 0), 1)
+            x: min(max(glowLocation.x / size.width, 0), 1),
+            y: min(max(1 - glowLocation.y / size.height, 0), 1)
         )
+    }
+
+    private func updateGlowLocation(_ location: CGPoint) {
+        withAnimation(.spring(response: 0.68, dampingFraction: 0.72, blendDuration: 0.18)) {
+            glowLocation = location
+        }
     }
 }
 
