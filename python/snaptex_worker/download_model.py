@@ -8,6 +8,11 @@ from tqdm.auto import tqdm
 
 
 MODEL_VARIANTS = ("tiny", "small", "base")
+MODEL_SIZE_ALIASES = {
+    "s": "tiny",
+    "m": "small",
+    "l": "base",
+}
 
 
 def default_models_dir():
@@ -30,6 +35,14 @@ def build_snapshot_download_kwargs(variant, target, progress_json, supported_par
     if progress_json and "tqdm_class" in supported_parameters:
         kwargs["tqdm_class"] = JsonProgress
     return kwargs
+
+
+def normalize_unimernet_variant(value):
+    variant = value.strip().lower()
+    variant = MODEL_SIZE_ALIASES.get(variant, variant)
+    if variant not in MODEL_VARIANTS:
+        raise ValueError(f"Unknown UniMERNet model variant: {value}")
+    return variant
 
 
 class JsonProgress(tqdm):
@@ -66,6 +79,7 @@ class JsonProgress(tqdm):
 
 
 def download_model(variant, models_dir, progress_json=False):
+    variant = normalize_unimernet_variant(variant)
     target = Path(models_dir).expanduser().resolve() / f"unimernet_{variant}"
     target.mkdir(parents=True, exist_ok=True)
 
@@ -97,7 +111,7 @@ def import_snapshot_download():
 
 def main():
     parser = argparse.ArgumentParser(description="Download UniMERNet model files")
-    parser.add_argument("--variant", choices=MODEL_VARIANTS, default="small")
+    parser.add_argument("--variant", default="m")
     parser.add_argument(
         "--models-dir",
         default=default_models_dir(),
@@ -109,11 +123,14 @@ def main():
     )
     args = parser.parse_args()
 
-    download_model(
-        variant=args.variant,
-        models_dir=args.models_dir,
-        progress_json=args.progress_json,
-    )
+    try:
+        download_model(
+            variant=args.variant,
+            models_dir=args.models_dir,
+            progress_json=args.progress_json,
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
 
 if __name__ == "__main__":

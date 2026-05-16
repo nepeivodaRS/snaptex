@@ -44,7 +44,7 @@ struct UniMERModelDownloader: UniMERModelDownloading {
             "-m",
             "snaptex_worker.download_model",
             "--variant",
-            variant.rawValue,
+            variant.workerModelName,
             "--models-dir",
             modelsDirectory.path,
             "--progress-json"

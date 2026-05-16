@@ -255,13 +255,15 @@ private struct ModelManagementRow: View {
                     .frame(width: 18)
             }
             .buttonStyle(.borderless)
-            .disabled(!state.isInstalled || state.isDownloading)
+            .disabled(!variant.requiresManagedFiles || !state.isInstalled || state.isDownloading)
             .help("Delete local \(variant.title) model files")
         }
     }
 
     private var statusText: String {
         switch state {
+        case .available:
+            return "Available"
         case .installed:
             return isSelected ? "Installed, selected" : "Installed"
         case .missing:
@@ -278,7 +280,7 @@ private struct ModelManagementRow: View {
 
     private var buttonTitle: String {
         switch state {
-        case .installed:
+        case .available, .installed:
             return isSelected ? "Selected" : "Use"
         case .missing, .failed:
             return "Download"

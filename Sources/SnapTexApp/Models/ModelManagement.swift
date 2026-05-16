@@ -23,6 +23,7 @@ struct ActiveModelDownload: Equatable {
 }
 
 enum ManagedModelState: Equatable {
+    case available
     case installed
     case missing
     case downloading(progress: Double?)
@@ -30,6 +31,9 @@ enum ManagedModelState: Equatable {
 
     var isInstalled: Bool {
         if case .installed = self {
+            return true
+        }
+        if case .available = self {
             return true
         }
         return false

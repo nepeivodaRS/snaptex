@@ -200,6 +200,9 @@ final class AppModel: ObservableObject {
     }
 
     func modelState(for variant: UniMERModelVariant) -> ManagedModelState {
+        if !variant.requiresManagedFiles {
+            return .available
+        }
         if let state = modelDownloadStates[variant], state.isDownloading {
             return state
         }
@@ -212,6 +215,7 @@ final class AppModel: ObservableObject {
     func refreshModelStatuses(fileManager: FileManager = .default) {
         installedModels = Set(
             UniMERModelVariant.allCases.filter {
+                $0.requiresManagedFiles &&
                 $0.isInstalled(in: settings.uniMERNetPath, fileManager: fileManager)
             }
         )
@@ -228,7 +232,8 @@ final class AppModel: ObservableObject {
     }
 
     func requestModelDownload(_ variant: UniMERModelVariant) {
-        guard !modelState(for: variant).isDownloading else {
+        guard variant.requiresManagedFiles,
+              !modelState(for: variant).isDownloading else {
             return
         }
         pendingModelDownload = PendingModelDownload(variant: variant)
@@ -248,7 +253,8 @@ final class AppModel: ObservableObject {
     }
 
     func requestModelDeletion(_ variant: UniMERModelVariant) {
-        guard modelState(for: variant).isInstalled else {
+        guard variant.requiresManagedFiles,
+              modelState(for: variant).isInstalled else {
             return
         }
         pendingModelDeletion = PendingModelDeletion(variant: variant)
@@ -906,7 +912,8 @@ final class AppModel: ObservableObject {
     }
 
     private func startModelDownload(_ variant: UniMERModelVariant, selectWhenComplete: Bool) {
-        guard !modelState(for: variant).isDownloading else {
+        guard variant.requiresManagedFiles,
+              !modelState(for: variant).isDownloading else {
             return
         }
 
@@ -945,6 +952,10 @@ final class AppModel: ObservableObject {
     }
 
     private func deleteModel(_ variant: UniMERModelVariant) {
+        guard variant.requiresManagedFiles else {
+            return
+        }
+
         let fileManager = FileManager.default
         let modelDirectory = modelDirectoryURL(for: variant)
 

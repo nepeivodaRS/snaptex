@@ -22,3 +22,4 @@ huggingface_hub
 pillow
 pyyaml
 tqdm
+paddleocr

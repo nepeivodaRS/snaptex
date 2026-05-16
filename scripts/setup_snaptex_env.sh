@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="${SNAPTEX_ENV_NAME:-${ENV_NAME:-snaptex}}"
-MODEL_VARIANT="${SNAPTEX_MODEL_VARIANT:-${MODEL_VARIANT:-small}}"
+MODEL_VARIANT="${SNAPTEX_MODEL_SIZE:-${MODEL_SIZE:-${SNAPTEX_MODEL_VARIANT:-${MODEL_VARIANT:-m}}}}"
 APP_SUPPORT_DIR="${SNAPTEX_APP_SUPPORT_DIR:-$HOME/Library/Application Support/snaptex}"
 UNIMERNET_DIR="${SNAPTEX_UNIMERNET_DIR:-${UNIMERNET_DIR:-$APP_SUPPORT_DIR/UniMERNet}}"
 
@@ -59,6 +59,7 @@ else
   git clone --depth 1 https://github.com/opendatalab/UniMERNet.git "$UNIMERNET_DIR"
 fi
 
+PYTHONNOUSERSITE=1 "$PYTHON_BIN" -m pip install --no-cache-dir paddlepaddle==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
 PYTHONNOUSERSITE=1 "$PYTHON_BIN" -m pip install --no-cache-dir -r "$ROOT_DIR/python/requirements.txt"
 PYTHONNOUSERSITE=1 "$PYTHON_BIN" "$ROOT_DIR/scripts/download_model.py" \
   --variant "$MODEL_VARIANT" \

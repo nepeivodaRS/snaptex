@@ -37,6 +37,22 @@ LOG_VERBOSITY_RANKS = {
 }
 SAMPLED_PASS_TEMPERATURE = 0.85
 SAMPLED_PASS_TOP_P = 0.95
+MODEL_SIZES = {"s", "m", "l"}
+UNIMERNET_SIZE_TO_VARIANT = {
+    "s": "tiny",
+    "m": "small",
+    "l": "base",
+}
+UNIMERNET_VARIANT_TO_SIZE = {
+    "tiny": "s",
+    "small": "m",
+    "base": "l",
+}
+PADDLE_SIZE_TO_MODEL = {
+    "s": "PP-FormulaNet_plus-S",
+    "m": "PP-FormulaNet_plus-M",
+    "l": "PP-FormulaNet_plus-L",
+}
 
 
 def json_response(payload):
@@ -63,6 +79,65 @@ def ocr_pass_count(mode):
     return 1
 
 
+def normalize_model_selection(value):
+    if value is None:
+        return make_model_selection("unimernet", "m")
+
+    if isinstance(value, dict):
+        provider = normalize_model_provider(value.get("provider"))
+        size = normalize_model_size(value.get("size"))
+        return make_model_selection(provider, size)
+
+    if isinstance(value, str):
+        identifier = value.strip().lower()
+        if identifier in UNIMERNET_VARIANT_TO_SIZE:
+            return make_model_selection("unimernet", UNIMERNET_VARIANT_TO_SIZE[identifier])
+        if identifier in MODEL_SIZES:
+            return make_model_selection("unimernet", identifier)
+        for size, model_name in PADDLE_SIZE_TO_MODEL.items():
+            if identifier in {f"paddlepaddle-{size}", model_name.lower()}:
+                return make_model_selection("paddlepaddle", size)
+
+    raise ValueError(f"Unknown OCR model selection: {value}")
+
+
+def normalize_model_provider(value):
+    provider = (value or "unimernet").strip().lower()
+    if provider in {"unimernet", "uni_mer_net"}:
+        return "unimernet"
+    if provider in {"paddle", "paddlepaddle", "paddle_paddle"}:
+        return "paddlepaddle"
+    raise ValueError(f"Unknown OCR model provider: {value}")
+
+
+def normalize_model_size(value):
+    size = (value or "m").strip().lower()
+    if size in MODEL_SIZES:
+        return size
+    if size in UNIMERNET_VARIANT_TO_SIZE:
+        return UNIMERNET_VARIANT_TO_SIZE[size]
+    raise ValueError(f"Unknown OCR model size: {value}")
+
+
+def make_model_selection(provider, size):
+    if provider == "unimernet":
+        model_name = UNIMERNET_SIZE_TO_VARIANT[size]
+    elif provider == "paddlepaddle":
+        model_name = PADDLE_SIZE_TO_MODEL[size]
+    else:
+        raise ValueError(f"Unknown OCR model provider: {provider}")
+
+    return {
+        "provider": provider,
+        "size": size,
+        "model_name": model_name,
+        "response": {
+            "provider": provider,
+            "size": size,
+        },
+    }
+
+
 def unique(values):
     seen = set()
     result = []
@@ -79,6 +154,46 @@ def prediction_strings(output):
     if isinstance(predictions, str):
         return [predictions]
     return list(predictions)
+
+
+def paddle_prediction_strings(output):
+    items = output if isinstance(output, list) else [output]
+    predictions = []
+    for item in items:
+        prediction = paddle_prediction_string(item)
+        if prediction:
+            predictions.append(prediction)
+    return predictions
+
+
+def paddle_prediction_string(item):
+    if isinstance(item, dict):
+        return prediction_from_mapping(item)
+
+    for attribute in ("res", "json"):
+        value = getattr(item, attribute, None)
+        if callable(value):
+            value = value()
+        if isinstance(value, str):
+            try:
+                value = json.loads(value)
+            except json.JSONDecodeError:
+                pass
+        if isinstance(value, dict):
+            prediction = prediction_from_mapping(value)
+            if prediction:
+                return prediction
+
+    return None
+
+
+def prediction_from_mapping(value):
+    if "rec_formula" in value:
+        return str(value["rec_formula"]).strip()
+    nested = value.get("res")
+    if isinstance(nested, dict) and "rec_formula" in nested:
+        return str(nested["rec_formula"]).strip()
+    return None
 
 
 def repeat_image_batch(image, batch_size):
@@ -354,6 +469,91 @@ class UniMEREngine:
         return Path(temporary.name)
 
 
+class PaddleFormulaEngine:
+    def __init__(self):
+        self.cache = {}
+
+    def predict(self, image_path, model_selection, mode, validate_render, log_verbosity="normal"):
+        model_name = model_selection["model_name"]
+        worker_log(
+            log_verbosity,
+            "verbose",
+            f"predict start: model={model_name}, ocr_passes=1, validate_render={validate_render}, device=paddleocr",
+        )
+        model = self._load_model(model_name, log_verbosity)
+
+        output = model.predict(input=image_path, batch_size=1)
+        alternatives = unique(paddle_prediction_strings(output))
+        worker_log(log_verbosity, "verbose", f"predict complete: alternatives={len(alternatives)}")
+        return {
+            "ok": True,
+            "prediction": alternatives[0] if alternatives else "",
+            "alternatives": alternatives,
+            "model": model_selection["response"],
+            "mode": mode,
+        }
+
+    def _load_model(self, model_name, log_verbosity="normal"):
+        if model_name in self.cache:
+            worker_log(log_verbosity, "verbose", f"model cache hit: {model_name}")
+            return self.cache[model_name]
+
+        worker_log(log_verbosity, "verbose", f"model load start: {model_name}")
+        try:
+            from paddleocr import FormulaRecognition
+        except ImportError as exc:
+            python = sys.executable
+            raise ImportError(
+                "PaddlePaddle OCR support requires paddleocr and paddlepaddle in the worker Python environment. "
+                f"Python: {python}. "
+                f"Install with: {python} -m pip install paddlepaddle==3.0.0 "
+                "-i https://www.paddlepaddle.org.cn/packages/stable/cpu/ && "
+                f"{python} -m pip install paddleocr. "
+                "You can also rerun scripts/setup_snaptex_env.sh from the SnapTex checkout."
+            ) from exc
+
+        with quiet_model_output():
+            model = FormulaRecognition(model_name=model_name)
+        self.cache[model_name] = model
+        worker_log(log_verbosity, "verbose", f"model load complete: {model_name}")
+        return model
+
+
+class OCREngine:
+    def __init__(self, unimernet_path):
+        self.unimernet_path = unimernet_path
+        self.unimernet_engine = None
+        self.paddle_engine = None
+
+    def predict(self, image_path, model_selection, mode, validate_render, log_verbosity="normal"):
+        provider = model_selection["provider"]
+        if provider == "unimernet":
+            result = self._unimernet().predict(
+                image_path,
+                model_selection["model_name"],
+                mode,
+                validate_render,
+                log_verbosity,
+            )
+            result["model"] = model_selection["response"]
+            return result
+
+        if provider == "paddlepaddle":
+            return self._paddle().predict(image_path, model_selection, mode, validate_render, log_verbosity)
+
+        raise ValueError(f"Unknown OCR model provider: {provider}")
+
+    def _unimernet(self):
+        if self.unimernet_engine is None:
+            self.unimernet_engine = UniMEREngine(self.unimernet_path)
+        return self.unimernet_engine
+
+    def _paddle(self):
+        if self.paddle_engine is None:
+            self.paddle_engine = PaddleFormulaEngine()
+        return self.paddle_engine
+
+
 def handle_request(line, engine):
     try:
         request = json.loads(line)
@@ -364,14 +564,18 @@ def handle_request(line, engine):
     if not image_path.exists():
         return json_response({"ok": False, "error": f"Image file not found: {image_path}"})
 
-    model = request.get("model", "small")
+    try:
+        model = normalize_model_selection(request.get("model"))
+    except ValueError as exc:
+        return json_response({"ok": False, "error": str(exc)})
+
     mode = request.get("mode", "balanced")
     validate_render = bool(request.get("validate_render", True))
     log_verbosity = normalize_log_verbosity(request.get("log_verbosity", "normal"))
     worker_log(
         log_verbosity,
         "verbose",
-        f"request: image={image_path.name}, model={model}, ocr_passes={ocr_pass_count(mode)}, validate_render={validate_render}",
+        f"request: image={image_path.name}, model={model['model_name']}, ocr_passes={ocr_pass_count(mode)}, validate_render={validate_render}",
     )
 
     try:
@@ -386,14 +590,7 @@ def handle_request(line, engine):
 
 
 def run(args):
-    try:
-        with quiet_model_output():
-            engine = UniMEREngine(args.unimernet_path)
-    except Exception as exc:
-        traceback.print_exc(file=sys.stderr)
-        print(json_response({"ok": False, "ready": False, "error": str(exc)}), flush=True)
-        return
-
+    engine = OCREngine(args.unimernet_path)
     print(json_response({"ok": True, "ready": True}), flush=True)
     for line in sys.stdin:
         line = line.strip()
@@ -405,7 +602,7 @@ def run(args):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="UniMERNet JSON-line OCR worker")
+    parser = argparse.ArgumentParser(description="SnapTex JSON-line OCR worker")
     parser.add_argument("--unimernet-path", required=True)
     run(parser.parse_args())
 

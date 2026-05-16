@@ -8,9 +8,22 @@ final class AppLayoutMetricsTests: XCTestCase {
             + AppLayoutMetrics.capturePaneMinWidth
             + AppLayoutMetrics.outputPaneMinWidth
             + 32
+        let fullToolbarMinimumWidth = AppLayoutMetrics.toolbarPrimaryActionMinWidth + 24
+            + (AppLayoutMetrics.toolbarActionButtonMinWidth + 22) * 3
+            + 8 * 3
+            + 1
+            + AppLayoutMetrics.toolbarModelLabelWidth + 6 + 190
+            + 32 + 6 + 104
+            + AppLayoutMetrics.toolbarPassesLabelWidth + 6 + 120
+            + 12 * 2
+            + AppLayoutMetrics.toolbarStatusWidth
+            + 12 * 5
+            + AppLayoutMetrics.toolbarLeadingPadding
+            + AppLayoutMetrics.outputPaneContentPadding
 
-        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, 1_200)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, 1_320)
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, paneMinimumWidth)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, fullToolbarMinimumWidth)
     }
 
     func testHistoryPaneAllowsWiderFolderOrganization() {
@@ -20,8 +33,8 @@ final class AppLayoutMetricsTests: XCTestCase {
     }
 
     func testToolbarLabelsReserveSingleLineWidths() {
-        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarModelLabelWidth, 76)
-        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarPassesLabelWidth, 82)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarModelLabelWidth, 44)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarPassesLabelWidth, 54)
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarPrimaryActionMinWidth, 76)
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarActionButtonMinWidth, 82)
     }
@@ -133,8 +146,10 @@ final class AppLayoutMetricsTests: XCTestCase {
     func testRecognitionControlsUseIndividualSegmentHoverAndSlidingSelection() throws {
         let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
 
-        XCTAssertTrue(source.contains("Text(\"OCR model\")"))
-        XCTAssertTrue(source.contains("Text(\"OCR passes\")"))
+        XCTAssertTrue(source.contains("Text(\"Model\")"))
+        XCTAssertTrue(source.contains("Text(\"Passes\")"))
+        XCTAssertFalse(source.contains("Text(\"OCR model\")"))
+        XCTAssertFalse(source.contains("Text(\"OCR passes\")"))
         XCTAssertTrue(source.contains("SmoothRecognitionSegmentedControl("))
         XCTAssertTrue(source.contains("@State private var hoveredOption: Option?"))
         XCTAssertTrue(source.contains("hoveredOption == option"))
@@ -142,8 +157,8 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains(".offset(x: CGFloat(selectedIndex) * segmentWidth + 2)"))
         XCTAssertTrue(source.contains(".animation(.spring(response: 0.28, dampingFraction: 0.82), value: selectedIndex)"))
         XCTAssertTrue(source.contains(".onHover { isHovered in"))
-        XCTAssertFalse(source.contains("Picker(\"OCR model\""))
-        XCTAssertFalse(source.contains("Picker(\"OCR passes\""))
+        XCTAssertFalse(source.contains("Picker(\"Model\""))
+        XCTAssertFalse(source.contains("Picker(\"Passes\""))
         XCTAssertFalse(source.contains("HoverableRecognitionControl("))
     }
 

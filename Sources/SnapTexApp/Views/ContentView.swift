@@ -140,7 +140,7 @@ private struct RecognitionControlGroup: View {
         HStack(spacing: showsLabels ? 12 : 8) {
             HStack(spacing: 6) {
                 if showsLabels {
-                    Text("OCR model")
+                    Text("Model")
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -148,17 +148,35 @@ private struct RecognitionControlGroup: View {
                 }
 
                 SmoothRecognitionSegmentedControl(
-                    selection: modelSelection,
-                    options: UniMERModelVariant.allCases,
-                    width: showsLabels ? 210 : 174,
+                    selection: providerSelection,
+                    options: OCRModelProvider.allCases,
+                    width: showsLabels ? 190 : 164,
                     title: \.title
                 )
-                .help("Choose which UniMERNet model size to use")
+                .help("Choose which OCR model family to use")
             }
 
             HStack(spacing: 6) {
                 if showsLabels {
-                    Text("OCR passes")
+                    Text("Size")
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .frame(width: 32, alignment: .leading)
+                }
+
+                SmoothRecognitionSegmentedControl(
+                    selection: sizeSelection,
+                    options: OCRModelSize.allCases,
+                    width: showsLabels ? 104 : 94,
+                    title: \.title
+                )
+                .help("Choose OCR model size")
+            }
+
+            HStack(spacing: 6) {
+                if showsLabels {
+                    Text("Passes")
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
@@ -178,10 +196,21 @@ private struct RecognitionControlGroup: View {
         .fixedSize(horizontal: true, vertical: false)
     }
 
-    private var modelSelection: Binding<UniMERModelVariant> {
+    private var providerSelection: Binding<OCRModelProvider> {
         Binding(
-            get: { model.settings.modelVariant },
-            set: { model.selectModelVariant($0) }
+            get: { model.settings.modelVariant.provider },
+            set: {
+                model.selectModelVariant(OCRModelSelection(provider: $0, size: model.settings.modelVariant.size))
+            }
+        )
+    }
+
+    private var sizeSelection: Binding<OCRModelSize> {
+        Binding(
+            get: { model.settings.modelVariant.size },
+            set: {
+                model.selectModelVariant(OCRModelSelection(provider: model.settings.modelVariant.provider, size: $0))
+            }
         )
     }
 }
@@ -216,6 +245,7 @@ private struct SmoothRecognitionSegmentedControl<Option: Identifiable & Equatabl
                         Text(title(option))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(foreground(for: option))
+                            .lineLimit(1)
                             .frame(width: segmentWidth, height: 28)
                             .contentShape(RoundedRectangle(cornerRadius: 5))
                     }

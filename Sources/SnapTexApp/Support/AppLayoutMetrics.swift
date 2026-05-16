@@ -10,13 +10,13 @@ enum AppLayoutMetrics {
     static let outputPaneContentPadding: CGFloat = 14
     static let toolbarVerticalPadding: CGFloat = 12
     static let toolbarLeadingPadding: CGFloat = 12
-    static let toolbarModelLabelWidth: CGFloat = 76
-    static let toolbarPassesLabelWidth: CGFloat = 82
+    static let toolbarModelLabelWidth: CGFloat = 44
+    static let toolbarPassesLabelWidth: CGFloat = 54
     static let toolbarPrimaryActionMinWidth: CGFloat = 76
     static let toolbarActionButtonMinWidth: CGFloat = 82
     static let toolbarDownloadProgressWidth: CGFloat = 120
     static let toolbarStatusWidth: CGFloat = 180
-    static let mainWindowMinWidth: CGFloat = 1_200
+    static let mainWindowMinWidth: CGFloat = 1_340
     static let mainWindowMinHeight: CGFloat = 680
     static let settingsWindowMinWidth: CGFloat = 780
     static let settingsWindowIdealWidth: CGFloat = 900

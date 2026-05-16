@@ -14,8 +14,8 @@ final class SettingsTests: XCTestCase {
             settings.workerScriptPath.hasSuffix("python/snaptex_worker/worker.py"),
             settings.workerScriptPath
         )
-        XCTAssertEqual(.small, settings.modelVariant)
-        XCTAssertEqual(.balanced, settings.recognitionMode)
+        XCTAssertEqual(OCRModelSelection(provider: .uniMERNet, size: .medium), settings.modelVariant)
+        XCTAssertEqual(.fast, settings.recognitionMode)
         XCTAssertTrue(settings.validateRender)
         XCTAssertEqual(.defaultSnip, settings.snipShortcut)
         XCTAssertEqual("⌘⇧1", settings.snipShortcut.displayText)
@@ -56,7 +56,8 @@ final class SettingsTests: XCTestCase {
     func testModelVariantDetectsInstalledModelLayouts() throws {
         let root = try makeTemporaryDirectory()
 
-        XCTAssertFalse(UniMERModelVariant.small.isInstalled(in: root.path))
+        let model = OCRModelSelection(provider: .uniMERNet, size: .medium)
+        XCTAssertFalse(model.isInstalled(in: root.path))
 
         let nestedModel = root
             .appendingPathComponent("models")
@@ -68,11 +69,12 @@ final class SettingsTests: XCTestCase {
         )
         FileManager.default.createFile(atPath: nestedModel.path, contents: Data())
 
-        XCTAssertTrue(UniMERModelVariant.small.isInstalled(in: root.path))
+        XCTAssertTrue(model.isInstalled(in: root.path))
     }
 
     func testModelVariantDetectsHuggingFacePytorchModelPTHLayout() throws {
         let root = try makeTemporaryDirectory()
+        let model = OCRModelSelection(provider: .uniMERNet, size: .large)
         let modelFile = root
             .appendingPathComponent("models")
             .appendingPathComponent("unimernet_base")
@@ -83,7 +85,16 @@ final class SettingsTests: XCTestCase {
         )
         FileManager.default.createFile(atPath: modelFile.path, contents: Data())
 
-        XCTAssertTrue(UniMERModelVariant.base.isInstalled(in: root.path))
+        XCTAssertTrue(model.isInstalled(in: root.path))
+    }
+
+    func testPaddlePaddleModelsDoNotRequireManagedFiles() throws {
+        let root = try makeTemporaryDirectory()
+        let model = OCRModelSelection(provider: .paddlePaddle, size: .large)
+
+        XCTAssertFalse(model.requiresManagedFiles)
+        XCTAssertTrue(model.isInstalled(in: root.path))
+        XCTAssertEqual("PP-FormulaNet_plus-L", model.workerModelName)
     }
 
     func testDefaultWorkerScriptPathPrefersBundledWorker() throws {
@@ -149,6 +160,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(settings.validateRender)
         XCTAssertTrue(settings.autoCopyAfterRecognition)
         XCTAssertEqual(32, settings.historyLimit)
+        XCTAssertEqual(OCRModelSelection(provider: .uniMERNet, size: .medium), settings.modelVariant)
         XCTAssertEqual(.defaultSnip, settings.snipShortcut)
         XCTAssertEqual(13, settings.historyTitleFontSize)
         XCTAssertEqual(14, settings.latexEditorFontSize)
@@ -198,6 +210,26 @@ final class SettingsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(AppSettingsSnapshot.self, from: data)
 
         XCTAssertEqual(.debug, decoded.logVerbosity)
+    }
+
+    func testDecodedSettingsMigrateLegacyBaseVariantToLargeUniMERNetSelection() throws {
+        let json = """
+        {
+          "condaPath": "conda",
+          "environmentName": "snaptex",
+          "uniMERNetPath": "/tmp/UniMERNet",
+          "modelVariant": "base",
+          "recognitionMode": "balanced",
+          "outputFormat": "raw",
+          "autoCopyAfterRecognition": false,
+          "historyLimit": 32,
+          "workerScriptPath": "/tmp/worker.py"
+        }
+        """
+
+        let settings = try JSONDecoder().decode(AppSettingsSnapshot.self, from: Data(json.utf8))
+
+        XCTAssertEqual(OCRModelSelection(provider: .uniMERNet, size: .large), settings.modelVariant)
     }
 
     private func makeTemporaryDirectory() throws -> URL {

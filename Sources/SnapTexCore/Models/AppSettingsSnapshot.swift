@@ -117,7 +117,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         environmentName: "snaptex",
         uniMERNetPath: AppSettingsSnapshot.defaultUniMERNetPath(),
         modelVariant: .small,
-        recognitionMode: .balanced,
+        recognitionMode: .fast,
         outputFormat: .raw,
         validateRender: true,
         autoCopyAfterRecognition: false,

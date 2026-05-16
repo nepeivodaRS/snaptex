@@ -6,13 +6,13 @@ from pathlib import Path
 
 from tqdm.contrib.concurrent import thread_map
 
-from snaptex_worker.download_model import JsonProgress, build_snapshot_download_kwargs
+from snaptex_worker.download_model import JsonProgress, build_snapshot_download_kwargs, normalize_unimernet_variant
 
 
 class DownloadModelTests(unittest.TestCase):
     def test_build_snapshot_download_kwargs_uses_variant_repo_and_target(self):
         kwargs = build_snapshot_download_kwargs(
-            variant="small",
+            variant=normalize_unimernet_variant("m"),
             target=Path("/tmp/models/unimernet_small"),
             progress_json=False,
             supported_parameters={"repo_id", "local_dir", "local_dir_use_symlinks"},
@@ -33,6 +33,11 @@ class DownloadModelTests(unittest.TestCase):
 
         self.assertEqual("wanderkid/unimernet_base", kwargs["repo_id"])
         self.assertIn("tqdm_class", kwargs)
+
+    def test_normalize_unimernet_variant_accepts_model_size_aliases(self):
+        self.assertEqual("tiny", normalize_unimernet_variant("s"))
+        self.assertEqual("small", normalize_unimernet_variant("m"))
+        self.assertEqual("base", normalize_unimernet_variant("l"))
 
     def test_json_progress_works_with_tqdm_thread_map(self):
         output = StringIO()

@@ -15,30 +15,56 @@ final class WorkerProtocolTests: XCTestCase {
         let request = UniMERWorkerRequest(
             imagePath: "/tmp/formula.png",
             mode: .accurate,
-            model: .small,
+            model: OCRModelSelection(provider: .uniMERNet, size: .medium),
             validateRender: true,
             logVerbosity: .debug
         )
 
         let data = try JSONEncoder().encode(request)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let model = try XCTUnwrap(json["model"] as? [String: Any])
 
         XCTAssertEqual("/tmp/formula.png", json["image_path"] as? String)
         XCTAssertEqual("accurate", json["mode"] as? String)
-        XCTAssertEqual("small", json["model"] as? String)
+        XCTAssertEqual("unimernet", model["provider"] as? String)
+        XCTAssertEqual("m", model["size"] as? String)
         XCTAssertEqual(true, json["validate_render"] as? Bool)
         XCTAssertEqual("debug", json["log_verbosity"] as? String)
     }
 
+    func testWorkerRequestEncodesPaddlePaddleLargeModelSelection() throws {
+        let request = UniMERWorkerRequest(
+            imagePath: "/tmp/formula.png",
+            mode: .balanced,
+            model: OCRModelSelection(provider: .paddlePaddle, size: .large),
+            validateRender: true
+        )
+
+        let data = try JSONEncoder().encode(request)
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let model = try XCTUnwrap(json["model"] as? [String: Any])
+
+        XCTAssertEqual("paddlepaddle", model["provider"] as? String)
+        XCTAssertEqual("l", model["size"] as? String)
+    }
+
     func testWorkerResponseDecodesPredictionAndAlternatives() throws {
-        let data = Data(#"{"ok":true,"prediction":"x^2","alternatives":["x^2","x^{2}"],"model":"small","mode":"balanced"}"#.utf8)
+        let data = Data(#"{"ok":true,"prediction":"x^2","alternatives":["x^2","x^{2}"],"model":{"provider":"unimernet","size":"m"},"mode":"balanced"}"#.utf8)
 
         let response = try JSONDecoder().decode(UniMERWorkerResponse.self, from: data)
 
         XCTAssertTrue(response.ok)
         XCTAssertEqual("x^2", response.prediction)
         XCTAssertEqual(["x^2", "x^{2}"], response.alternatives)
-        XCTAssertEqual(.small, response.model)
+        XCTAssertEqual(OCRModelSelection(provider: .uniMERNet, size: .medium), response.model)
         XCTAssertEqual(.balanced, response.mode)
+    }
+
+    func testWorkerResponseDecodesLegacyStringModel() throws {
+        let data = Data(#"{"ok":true,"prediction":"x^2","model":"base","mode":"fast"}"#.utf8)
+
+        let response = try JSONDecoder().decode(UniMERWorkerResponse.self, from: data)
+
+        XCTAssertEqual(OCRModelSelection(provider: .uniMERNet, size: .large), response.model)
     }
 }

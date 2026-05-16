@@ -1,6 +1,8 @@
 import contextlib
 import json
+import sys
 import types
+from unittest import mock
 from pathlib import Path
 import tempfile
 import unittest
@@ -8,17 +10,17 @@ import unittest
 from PIL import Image
 import yaml
 
-from snaptex_worker.worker import UniMEREngine, handle_request
+from snaptex_worker.worker import PaddleFormulaEngine, UniMEREngine, handle_request, normalize_model_selection
 
 
 class FakeEngine:
     def __init__(self):
         self.arguments = None
 
-    def predict(self, image_path, model_name, mode, validate_render, log_verbosity):
+    def predict(self, image_path, model_selection, mode, validate_render, log_verbosity):
         self.arguments = {
             "image_path": image_path,
-            "model": model_name,
+            "model": model_selection,
             "mode": mode,
             "validate_render": validate_render,
             "log_verbosity": log_verbosity,
@@ -27,7 +29,7 @@ class FakeEngine:
             "ok": True,
             "prediction": "x",
             "alternatives": ["x"],
-            "model": model_name,
+            "model": model_selection,
             "mode": mode,
         }
 
@@ -77,7 +79,7 @@ class WorkerRequestTests(unittest.TestCase):
                 json.dumps(
                     {
                         "image_path": handle.name,
-                        "model": "small",
+                        "model": {"provider": "paddlepaddle", "size": "l"},
                         "mode": "accurate",
                         "validate_render": True,
                         "log_verbosity": "debug",
@@ -90,6 +92,49 @@ class WorkerRequestTests(unittest.TestCase):
 
         self.assertTrue(payload["ok"])
         self.assertEqual("debug", engine.arguments["log_verbosity"])
+        self.assertEqual("paddlepaddle", engine.arguments["model"]["provider"])
+        self.assertEqual("PP-FormulaNet_plus-L", engine.arguments["model"]["model_name"])
+
+    def test_normalize_model_selection_maps_unimernet_size_to_existing_variant(self):
+        selection = normalize_model_selection({"provider": "unimernet", "size": "s"})
+
+        self.assertEqual("unimernet", selection["provider"])
+        self.assertEqual("s", selection["size"])
+        self.assertEqual("tiny", selection["model_name"])
+
+    def test_normalize_model_selection_maps_paddle_size_to_plus_model_name(self):
+        selection = normalize_model_selection({"provider": "paddlepaddle", "size": "m"})
+
+        self.assertEqual("paddlepaddle", selection["provider"])
+        self.assertEqual("m", selection["size"])
+        self.assertEqual("PP-FormulaNet_plus-M", selection["model_name"])
+
+    def test_normalize_model_selection_accepts_legacy_unimernet_string(self):
+        selection = normalize_model_selection("base")
+
+        self.assertEqual("unimernet", selection["provider"])
+        self.assertEqual("l", selection["size"])
+        self.assertEqual("base", selection["model_name"])
+
+    def test_paddle_import_error_reports_exact_install_commands(self):
+        original_import = __import__
+
+        def import_without_paddleocr(name, *args, **kwargs):
+            if name == "paddleocr":
+                raise ModuleNotFoundError("No module named 'paddleocr'")
+            return original_import(name, *args, **kwargs)
+
+        engine = PaddleFormulaEngine()
+
+        with mock.patch("builtins.__import__", side_effect=import_without_paddleocr):
+            with self.assertRaises(ImportError) as error:
+                engine._load_model("PP-FormulaNet_plus-S")
+
+        message = str(error.exception)
+
+        self.assertIn(sys.executable, message)
+        self.assertIn("python -m pip install paddlepaddle==3.0.0", message)
+        self.assertIn("python -m pip install paddleocr", message)
 
     def test_config_for_accepts_huggingface_pytorch_model_pth(self):
         with tempfile.TemporaryDirectory() as temporary:
