@@ -75,7 +75,7 @@ if [[ -f "$ICON_SOURCE" ]]; then
   cp "$ICON_SOURCE" "$APP_RESOURCES/logo.png"
   ICONSET="$DIST_DIR/AppIcon.iconset"
   rm -rf "$ICONSET"
-  python scripts/make_app_icon.py "$ICON_SOURCE" "$ICONSET" --app-icon-png "$APP_RESOURCES/AppIcon.png"
+  python "$ROOT_DIR/scripts/make_app_icon.py" "$ICON_SOURCE" "$ICONSET" --app-icon-png "$APP_RESOURCES/AppIcon.png"
   iconutil -c icns "$ICONSET" -o "$APP_RESOURCES/AppIcon.icns"
   rm -rf "$ICONSET"
 fi

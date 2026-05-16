@@ -45,6 +45,28 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("Label(\"Snip\", systemImage: \"crop\")"))
     }
 
+    func testRenderedPreviewHeaderExposesFormulaExportMenu() throws {
+        let toolbarSource = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
+        let previewSource = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
+
+        XCTAssertFalse(toolbarSource.contains("ExportFormulaMenu"))
+        XCTAssertTrue(previewSource.contains("ExportFormulaMenu"))
+        XCTAssertTrue(previewSource.contains("model.exportFormula(as: format)"))
+        XCTAssertTrue(previewSource.contains("Label(\"Export\", systemImage: \"square.and.arrow.down\")"))
+    }
+
+    func testExportMenuUsesHoverAnimation() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
+
+        XCTAssertTrue(source.contains("@State private var isExportHovered = false"))
+        XCTAssertTrue(source.contains("@State private var isExportPressed = false"))
+        XCTAssertTrue(source.contains("ExportMenuLabel("))
+        XCTAssertTrue(source.contains(".onHover { isExportHovered = $0 }"))
+        XCTAssertTrue(source.contains(".onLongPressGesture("))
+        XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.12), value: isExportHovered)"))
+        XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.08), value: isExportPressed)"))
+    }
+
     func testRecognitionControlsAreDisabledOnlyForCurrentRecognizingItem() throws {
         let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
 

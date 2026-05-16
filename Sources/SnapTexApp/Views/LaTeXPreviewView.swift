@@ -13,10 +13,13 @@ struct LaTeXPreviewView: NSViewRepresentable {
     }
 
     func updateNSView(_ webView: WKWebView, context: Context) {
-        webView.loadHTMLString(LaTeXPreviewHTML.make(latex: latex, fontSize: fontSize), baseURL: Self.resourceBaseURL)
-    }
-
-    private static var resourceBaseURL: URL? {
-        Bundle.main.url(forResource: "MathJax", withExtension: "js")?.deletingLastPathComponent()
+        webView.loadHTMLString(
+            LaTeXPreviewHTML.make(
+                latex: latex,
+                fontSize: fontSize,
+                mathJaxScriptTag: MathJaxResource.inlineScriptTag
+            ),
+            baseURL: MathJaxResource.baseURL
+        )
     }
 }

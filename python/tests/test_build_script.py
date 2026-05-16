@@ -34,6 +34,10 @@ class BuildScriptTests(unittest.TestCase):
         self.assertIn('/usr/bin/open "$INSTALL_BUNDLE"', self.source)
         self.assertNotIn('/usr/bin/open -n "$INSTALL_BUNDLE"', self.source)
 
+    def test_build_invokes_icon_generator_from_root_dir(self):
+        self.assertIn('python "$ROOT_DIR/scripts/make_app_icon.py"', self.source)
+        self.assertNotIn("python scripts/make_app_icon.py", self.source)
+
 
 if __name__ == "__main__":
     unittest.main()

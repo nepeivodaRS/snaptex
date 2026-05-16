@@ -140,6 +140,21 @@ final class AppModelRecognitionTests: XCTestCase {
         XCTAssertFalse(model.isCurrentItemRecognizing)
     }
 
+    func testFormulaExportRequiresRenderedPreview() {
+        let model = AppModel()
+        model.latexOutput = "x + y"
+
+        XCTAssertFalse(model.canExportFormula)
+
+        model.previewLatex = "x + y"
+
+        XCTAssertTrue(model.canExportFormula)
+
+        model.previewIssue = LaTeXValidationIssue(message: "Invalid", location: 0, length: 1)
+
+        XCTAssertFalse(model.canExportFormula)
+    }
+
     func testRecognizingHistoryItemLocksOnlyTheCurrentItem() {
         let model = AppModel()
         let recognized = OCRHistoryEntry(

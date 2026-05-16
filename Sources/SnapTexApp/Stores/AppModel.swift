@@ -101,6 +101,12 @@ final class AppModel: ObservableObject {
         !latexOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    var canExportFormula: Bool {
+        !previewLatex.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+            previewIssue == nil &&
+            selectedHistoryEntry?.state != .recognizing
+    }
+
     var currentOutputFormat: LaTeXOutputFormat {
         selectedHistoryEntry?.outputFormat ?? settings.outputFormat
     }
@@ -334,6 +340,51 @@ final class AppModel: ObservableObject {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(latexOutput, forType: .string)
         status = "Copied"
+    }
+
+    func exportFormula(as format: FormulaExportFormat) {
+        guard canExportFormula else {
+            return
+        }
+
+        let bodyLatex = previewLatex.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !bodyLatex.isEmpty else {
+            status = "No formula to export"
+            return
+        }
+        if let issue = previewIssue ?? LaTeXValidator.firstIssue(in: bodyLatex) {
+            status = "Cannot export invalid LaTeX"
+            appendLog(issue.message)
+            return
+        }
+
+        let panel = NSSavePanel()
+        panel.title = "Export Formula"
+        panel.allowedContentTypes = [format.contentType]
+        panel.canCreateDirectories = true
+        panel.isExtensionHidden = false
+        panel.nameFieldStringValue = "snaptex-formula.\(format.fileExtension)"
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        status = "Exporting \(format.title)..."
+        Task { [bodyLatex, fontSize = renderedPreviewFontSize, format, url] in
+            do {
+                let exporter = FormulaImageExporter()
+                try await exporter.export(
+                    latex: bodyLatex,
+                    fontSize: fontSize,
+                    format: format,
+                    to: url
+                )
+                status = "Exported \(format.title)"
+            } catch {
+                status = "Export failed"
+                appendLog(error.localizedDescription)
+            }
+        }
     }
 
     func applyAlternative(_ latex: String) {

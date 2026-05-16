@@ -28,6 +28,12 @@ struct CapturePreviewPane: View {
 
                 Spacer()
 
+                ExportFormulaMenu(model: model)
+
+                Rectangle()
+                    .fill(AppTheme.border)
+                    .frame(width: 1, height: 22)
+
                 previewZoomControls
             }
 
@@ -135,6 +141,87 @@ struct CapturePreviewPane: View {
         }
         .controlSize(.small)
         .foregroundStyle(.secondary)
+    }
+}
+
+private struct ExportFormulaMenu: View {
+    @ObservedObject var model: AppModel
+    @State private var isExportHovered = false
+    @State private var isExportPressed = false
+
+    var body: some View {
+        Menu {
+            ForEach(FormulaExportFormat.allCases) { format in
+                Button(format.title) {
+                    model.exportFormula(as: format)
+                }
+            }
+        } label: {
+            ExportMenuLabel(
+                isHovered: isExportHovered,
+                isPressed: isExportPressed,
+                isEnabled: model.canExportFormula
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .disabled(!model.canExportFormula)
+        .onHover { isExportHovered = $0 }
+        .onLongPressGesture(
+            minimumDuration: 0,
+            maximumDistance: 8,
+            pressing: { isExportPressed = $0 },
+            perform: {}
+        )
+        .animation(.easeOut(duration: 0.12), value: isExportHovered)
+        .animation(.easeOut(duration: 0.08), value: isExportPressed)
+        .help("Export the rendered formula as a transparent PNG or EPS")
+    }
+}
+
+private struct ExportMenuLabel: View {
+    let isHovered: Bool
+    let isPressed: Bool
+    let isEnabled: Bool
+
+    var body: some View {
+        Label("Export", systemImage: "square.and.arrow.down")
+            .foregroundStyle(.primary.opacity(isEnabled ? 1 : 0.38))
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background {
+                RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius)
+                    .fill(AppTheme.controlBackground.opacity(backgroundOpacity))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius)
+                    .strokeBorder(borderColor, lineWidth: 1)
+            }
+            .shadow(color: AppTheme.primaryButtonBackground.opacity(isHovered && isEnabled ? 0.16 : 0), radius: 7, y: 1)
+            .scaleEffect(isPressed ? 0.96 : isHovered && isEnabled ? 1.05 : 1)
+            .offset(y: isHovered && isEnabled && !isPressed ? -2 : 0)
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius))
+            .animation(.easeOut(duration: 0.08), value: isPressed)
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+
+    private var backgroundOpacity: Double {
+        guard isEnabled else {
+            return 0.42
+        }
+        if isPressed {
+            return 0.72
+        }
+        return isHovered ? 1 : 0.72
+    }
+
+    private var borderColor: Color {
+        guard isEnabled else {
+            return AppTheme.border
+        }
+        if isPressed {
+            return AppTheme.selectedBorder
+        }
+        return isHovered ? AppTheme.primaryButtonBackground.opacity(0.40) : AppTheme.border
     }
 }
 

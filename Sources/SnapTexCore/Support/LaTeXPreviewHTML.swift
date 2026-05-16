@@ -1,7 +1,11 @@
 import Foundation
 
 public enum LaTeXPreviewHTML {
-    public static func make(latex: String, fontSize: Int = 18) -> String {
+    public static func make(
+        latex: String,
+        fontSize: Int = 18,
+        mathJaxScriptTag: String = #"<script src="MathJax.js"></script>"#
+    ) -> String {
         let body = latex.trimmingCharacters(in: .whitespacesAndNewlines)
         let escaped = body.htmlEscaped
         let safeFontSize = max(8, min(48, fontSize))
@@ -10,13 +14,13 @@ public enum LaTeXPreviewHTML {
         <html>
         <head>
           <meta charset="utf-8">
-          <script src="MathJax.js"></script>
-          <script>
+          <script type="text/x-mathjax-config">
             MathJax.Hub.Config({
               messageStyle: "none",
               tex2jax: { preview: "none" }
             });
           </script>
+          \(mathJaxScriptTag)
           <style>
             html, body {
               background: transparent;
