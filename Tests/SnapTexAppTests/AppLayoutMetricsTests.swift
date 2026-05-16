@@ -4,8 +4,13 @@ import XCTest
 
 final class AppLayoutMetricsTests: XCTestCase {
     func testMinimumWindowWidthFitsCurrentToolbarLabels() {
-        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, 1_020)
-        XCTAssertLessThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, 1_120)
+        let paneMinimumWidth = AppLayoutMetrics.historyPaneMinWidth
+            + AppLayoutMetrics.capturePaneMinWidth
+            + AppLayoutMetrics.outputPaneMinWidth
+            + 32
+
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, 1_200)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, paneMinimumWidth)
     }
 
     func testHistoryPaneAllowsWiderFolderOrganization() {
@@ -17,6 +22,8 @@ final class AppLayoutMetricsTests: XCTestCase {
     func testToolbarLabelsReserveSingleLineWidths() {
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarModelLabelWidth, 76)
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarPassesLabelWidth, 82)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarPrimaryActionMinWidth, 76)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarActionButtonMinWidth, 82)
     }
 
     func testToolbarHasResponsiveFullAndCompactLayouts() throws {
@@ -27,6 +34,14 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("CompactToolbarLayout("))
         XCTAssertTrue(source.contains("ToolbarActionStrip("))
         XCTAssertTrue(source.contains("RecognitionControlGroup("))
+    }
+
+    func testToolbarControlsUseStableMinimumWidths() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
+
+        XCTAssertTrue(source.contains(".frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)"))
+        XCTAssertTrue(source.contains(".frame(minWidth: AppLayoutMetrics.toolbarActionButtonMinWidth)"))
+        XCTAssertTrue(source.contains(".fixedSize(horizontal: true, vertical: false)"))
     }
 
     func testCaptureEmptyStateDoesNotExposeSnipAndPasteActions() throws {
@@ -90,6 +105,16 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(previewSource.contains("ExportFormulaMenu"))
         XCTAssertTrue(previewSource.contains("model.exportFormula(as: format)"))
         XCTAssertTrue(previewSource.contains("Label(\"Export\", systemImage: \"square.and.arrow.down\")"))
+    }
+
+    func testRenderedPreviewHeaderKeepsTitleSingleLine() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
+        guard let titleRange = source.range(of: "Text(\"Rendered Output\")") else {
+            XCTFail("Rendered Output header title should exist")
+            return
+        }
+
+        XCTAssertTrue(source[titleRange.upperBound...].prefix(140).contains(".lineLimit(1)"))
     }
 
     func testExportMenuUsesHoverAnimation() throws {
@@ -317,11 +342,34 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("makeKeyAndOrderFront"))
     }
 
+    func testMainWindowAppliesNativeContentMinimumSize() throws {
+        let source = try sourceFile("Sources/SnapTexApp/App/SnapTexApp.swift")
+
+        XCTAssertTrue(source.contains("WindowMinimumSizeEnforcer("))
+        XCTAssertTrue(source.contains("minSize: NSSize("))
+        XCTAssertTrue(source.contains("width: AppLayoutMetrics.mainWindowMinWidth"))
+        XCTAssertTrue(source.contains("height: AppLayoutMetrics.mainWindowMinHeight"))
+        XCTAssertTrue(source.contains("window.contentMinSize = minSize"))
+        XCTAssertTrue(source.contains("window.setContentSize(clampedContentSize)"))
+    }
+
     func testSettingsUsesExplicitPresenterInsteadOfUnhandledSelector() throws {
         let source = try sourceFile("Sources/SnapTexApp/App/SnapTexApp.swift")
 
         XCTAssertTrue(source.contains("SettingsWindowPresenter.show"))
         XCTAssertFalse(source.contains("showSettingsWindow:"))
+    }
+
+    func testSettingsPresenterAppliesNativeMinimumSize() throws {
+        let source = try sourceFile("Sources/SnapTexApp/App/SnapTexApp.swift")
+
+        XCTAssertTrue(source.contains("minWidth: AppLayoutMetrics.settingsWindowMinWidth"))
+        XCTAssertTrue(source.contains("idealWidth: AppLayoutMetrics.settingsWindowIdealWidth"))
+        XCTAssertTrue(source.contains("minHeight: AppLayoutMetrics.settingsWindowMinHeight"))
+        XCTAssertTrue(source.contains("idealHeight: AppLayoutMetrics.settingsWindowIdealHeight"))
+        XCTAssertTrue(source.contains("window.contentMinSize = NSSize("))
+        XCTAssertTrue(source.contains("width: AppLayoutMetrics.settingsWindowMinWidth"))
+        XCTAssertTrue(source.contains("height: AppLayoutMetrics.settingsWindowMinHeight"))
     }
 
     func testSettingsCanRevealModelFilesInFinder() throws {
@@ -340,12 +388,15 @@ final class AppLayoutMetricsTests: XCTestCase {
 
         SettingsWindowPresenter.show(model: model)
         let countAfterFirstOpen = settingsWindowCount()
+        let settingsWindow = settingsWindow()
 
         SettingsWindowPresenter.show(model: model)
         let countAfterSecondOpen = settingsWindowCount()
 
         XCTAssertEqual(1, countAfterFirstOpen)
         XCTAssertEqual(1, countAfterSecondOpen)
+        XCTAssertEqual(AppLayoutMetrics.settingsWindowMinWidth, settingsWindow?.contentMinSize.width)
+        XCTAssertEqual(AppLayoutMetrics.settingsWindowMinHeight, settingsWindow?.contentMinSize.height)
 
         SettingsWindowPresenter.closeForTesting()
     }
@@ -360,6 +411,11 @@ final class AppLayoutMetricsTests: XCTestCase {
     @MainActor
     private func settingsWindowCount() -> Int {
         NSApp.windows.filter { $0.title == "Settings" }.count
+    }
+
+    @MainActor
+    private func settingsWindow() -> NSWindow? {
+        NSApp.windows.first { $0.title == "Settings" }
     }
 
     private static func sourceRoot() throws -> URL {

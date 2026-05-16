@@ -102,6 +102,7 @@ private struct ToolbarActionStrip: View {
                 model.pasteImageFromClipboard()
             } label: {
                 Label("Paste", systemImage: "doc.on.clipboard")
+                    .frame(minWidth: AppLayoutMetrics.toolbarActionButtonMinWidth)
             }
             .buttonStyle(GraphiteSecondaryButtonStyle())
             .disabled(model.isSnipping || !model.canPasteImage)
@@ -111,6 +112,7 @@ private struct ToolbarActionStrip: View {
                 model.retry()
             } label: {
                 Label("Retry", systemImage: "arrow.clockwise")
+                    .frame(minWidth: AppLayoutMetrics.toolbarActionButtonMinWidth)
             }
             .buttonStyle(GraphiteSecondaryButtonStyle())
             .disabled(!model.canRetry)
@@ -120,11 +122,13 @@ private struct ToolbarActionStrip: View {
                 model.copyLatex()
             } label: {
                 Label("Copy", systemImage: "doc.on.doc")
+                    .frame(minWidth: AppLayoutMetrics.toolbarActionButtonMinWidth)
             }
             .buttonStyle(GraphiteSecondaryButtonStyle())
             .disabled(!model.canCopy)
             .help("Copy visible LaTeX")
         }
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
@@ -171,6 +175,7 @@ private struct RecognitionControlGroup: View {
             }
         }
         .disabled(!model.canChangeRecognitionSettings)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     private var modelSelection: Binding<UniMERModelVariant> {
@@ -334,6 +339,7 @@ private struct SnipButton: View {
             model.snip()
         } label: {
             Label("Snip", systemImage: "crop")
+                .frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)
         }
         .buttonStyle(GraphitePrimaryButtonStyle())
         .disabled(!model.canStartSnip)

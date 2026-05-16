@@ -18,6 +18,7 @@ struct CapturePreviewPane: View {
                 Text("Rendered Output")
                     .font(.headline)
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
 
                 if let currentResultModel = model.currentResultModel {
                     Text("Model: \(currentResultModel.title)")

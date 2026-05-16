@@ -15,6 +15,15 @@ struct SnapTexApp: App {
                     minWidth: AppLayoutMetrics.mainWindowMinWidth,
                     minHeight: AppLayoutMetrics.mainWindowMinHeight
                 )
+                .background(
+                    WindowMinimumSizeEnforcer(
+                        minSize: NSSize(
+                            width: AppLayoutMetrics.mainWindowMinWidth,
+                            height: AppLayoutMetrics.mainWindowMinHeight
+                        )
+                    )
+                    .frame(width: 0, height: 0)
+                )
                 .onAppear {
                     appDelegate.configure(model: model)
                 }
@@ -161,6 +170,63 @@ private func bringWindowToFront(titled title: String) -> Bool {
     return true
 }
 
+private struct WindowMinimumSizeEnforcer: NSViewRepresentable {
+    let minSize: NSSize
+
+    func makeNSView(context: Context) -> MinimumSizeView {
+        MinimumSizeView(minSize: minSize)
+    }
+
+    func updateNSView(_ view: MinimumSizeView, context: Context) {
+        view.minSize = minSize
+    }
+
+    final class MinimumSizeView: NSView {
+        var minSize: NSSize {
+            didSet {
+                enforceMinimumSize()
+            }
+        }
+
+        init(minSize: NSSize) {
+            self.minSize = minSize
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            enforceMinimumSize()
+        }
+
+        private func enforceMinimumSize() {
+            guard let window else {
+                return
+            }
+
+            window.contentMinSize = minSize
+
+            guard let contentSize = window.contentView?.bounds.size else {
+                return
+            }
+
+            let clampedContentSize = NSSize(
+                width: max(contentSize.width, minSize.width),
+                height: max(contentSize.height, minSize.height)
+            )
+
+            if clampedContentSize.width > contentSize.width
+                || clampedContentSize.height > contentSize.height {
+                window.setContentSize(clampedContentSize)
+            }
+        }
+    }
+}
+
 @MainActor
 enum SettingsWindowPresenter {
     private static var window: NSWindow?
@@ -173,12 +239,24 @@ enum SettingsWindowPresenter {
 
         let hostingController = NSHostingController(
             rootView: SettingsView(model: model)
-                .frame(minWidth: 780, idealWidth: 900, minHeight: 520, idealHeight: 640)
+                .frame(
+                    minWidth: AppLayoutMetrics.settingsWindowMinWidth,
+                    idealWidth: AppLayoutMetrics.settingsWindowIdealWidth,
+                    minHeight: AppLayoutMetrics.settingsWindowMinHeight,
+                    idealHeight: AppLayoutMetrics.settingsWindowIdealHeight
+                )
         )
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Settings"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-        window.setContentSize(NSSize(width: 900, height: 640))
+        window.contentMinSize = NSSize(
+            width: AppLayoutMetrics.settingsWindowMinWidth,
+            height: AppLayoutMetrics.settingsWindowMinHeight
+        )
+        window.setContentSize(NSSize(
+            width: AppLayoutMetrics.settingsWindowIdealWidth,
+            height: AppLayoutMetrics.settingsWindowIdealHeight
+        ))
         window.isReleasedWhenClosed = false
         self.window = window
         bring(window)

@@ -1,19 +1,25 @@
 import Foundation
 
 enum AppLayoutMetrics {
-    static let historyPaneMinWidth: CGFloat = 280
+    static let historyPaneMinWidth: CGFloat = 300
     static let historyPaneIdealWidth: CGFloat = 360
     static let historyPaneMaxWidth: CGFloat = 620
-    static let capturePaneMinWidth: CGFloat = 410
-    static let capturePaneIdealWidth: CGFloat = 520
-    static let outputPaneMinWidth: CGFloat = 310
+    static let capturePaneMinWidth: CGFloat = 460
+    static let capturePaneIdealWidth: CGFloat = 560
+    static let outputPaneMinWidth: CGFloat = 360
     static let outputPaneContentPadding: CGFloat = 14
     static let toolbarVerticalPadding: CGFloat = 12
     static let toolbarLeadingPadding: CGFloat = 12
     static let toolbarModelLabelWidth: CGFloat = 76
     static let toolbarPassesLabelWidth: CGFloat = 82
+    static let toolbarPrimaryActionMinWidth: CGFloat = 76
+    static let toolbarActionButtonMinWidth: CGFloat = 82
     static let toolbarDownloadProgressWidth: CGFloat = 120
     static let toolbarStatusWidth: CGFloat = 180
-    static let mainWindowMinWidth: CGFloat = 1_020
-    static let mainWindowMinHeight: CGFloat = 620
+    static let mainWindowMinWidth: CGFloat = 1_200
+    static let mainWindowMinHeight: CGFloat = 680
+    static let settingsWindowMinWidth: CGFloat = 780
+    static let settingsWindowIdealWidth: CGFloat = 900
+    static let settingsWindowMinHeight: CGFloat = 520
+    static let settingsWindowIdealHeight: CGFloat = 640
 }
