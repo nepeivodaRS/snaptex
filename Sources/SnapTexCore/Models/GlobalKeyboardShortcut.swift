@@ -50,7 +50,7 @@ public struct GlobalKeyboardShortcut: Codable, Equatable, Sendable {
     }
 
     public static let defaultSnip = GlobalKeyboardShortcut(
-        keyCode: 18,
+        keyCode: 1,
         modifiers: [.command, .shift]
     )
 

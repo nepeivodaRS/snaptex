@@ -122,6 +122,34 @@ public struct OCRModelSelection: CaseIterable, Codable, Hashable, Identifiable, 
         }
     }
 
+    public func modelDirectory(in modelRootPath: String) -> URL {
+        let providerDirectory = modelsDirectory(in: modelRootPath)
+            .appendingPathComponent(provider.rawValue)
+
+        switch provider {
+        case .uniMERNet:
+            return providerDirectory.appendingPathComponent(size.rawValue)
+        case .paddlePaddle:
+            return providerDirectory
+                .appendingPathComponent("official_models")
+                .appendingPathComponent(workerModelName)
+        }
+    }
+
+    public func modelDirectories(in modelRootPath: String) -> [URL] {
+        let modelDirectory = modelDirectory(in: modelRootPath)
+        guard provider == .uniMERNet else {
+            return [modelDirectory]
+        }
+
+        let legacyProviderDirectory = modelsDirectory(in: modelRootPath)
+            .appendingPathComponent(provider.rawValue)
+            .appendingPathComponent(workerModelName)
+        let legacyDirectory = modelsDirectory(in: modelRootPath)
+            .appendingPathComponent(directoryName)
+        return [modelDirectory, legacyProviderDirectory, legacyDirectory]
+    }
+
     public var requiresManagedFiles: Bool {
         provider == .uniMERNet
     }
@@ -152,7 +180,7 @@ public struct OCRModelSelection: CaseIterable, Codable, Hashable, Identifiable, 
         fileManager: FileManager = .default
     ) -> Bool {
         guard requiresManagedFiles else {
-            return true
+            return false
         }
         return modelFileCandidates(in: uniMERNetPath).contains {
             fileManager.fileExists(atPath: $0.path)
@@ -164,15 +192,22 @@ public struct OCRModelSelection: CaseIterable, Codable, Hashable, Identifiable, 
             return []
         }
 
-        let root = URL(fileURLWithPath: (uniMERNetPath as NSString).expandingTildeInPath)
-        let modelsDirectory = root.appendingPathComponent("models")
-        let modelDirectory = modelsDirectory.appendingPathComponent(directoryName)
+        let rootModelsDirectory = modelsDirectory(in: uniMERNetPath)
+        let directoryCandidates = modelDirectories(in: uniMERNetPath).flatMap { modelDirectory in
+            [
+                modelDirectory.appendingPathComponent("\(directoryName).pth"),
+                modelDirectory.appendingPathComponent("pytorch_model.bin"),
+                modelDirectory.appendingPathComponent("pytorch_model.pth")
+            ]
+        }
         return [
-            modelsDirectory.appendingPathComponent("\(directoryName).pth"),
-            modelDirectory.appendingPathComponent("\(directoryName).pth"),
-            modelDirectory.appendingPathComponent("pytorch_model.bin"),
-            modelDirectory.appendingPathComponent("pytorch_model.pth")
-        ]
+            rootModelsDirectory.appendingPathComponent("\(directoryName).pth")
+        ] + directoryCandidates
+    }
+
+    private func modelsDirectory(in modelRootPath: String) -> URL {
+        URL(fileURLWithPath: (modelRootPath as NSString).expandingTildeInPath)
+            .appendingPathComponent("models")
     }
 
     public init(from decoder: Decoder) throws {

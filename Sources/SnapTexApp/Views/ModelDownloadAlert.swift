@@ -9,7 +9,7 @@ extension View {
         )) { request in
             Alert(
                 title: Text("Download \(request.variant.title) model?"),
-                message: Text("The model is missing from \(model.settings.uniMERNetPath)."),
+                message: Text(downloadMessage(for: request.variant, model: model)),
                 primaryButton: .default(Text("Download")) {
                     model.downloadPendingModel()
                 },
@@ -38,10 +38,17 @@ extension View {
         }
     }
 
+    private func downloadMessage(for variant: UniMERModelVariant, model: AppModel) -> String {
+        if variant.requiresManagedFiles {
+            return "The model is missing from \(model.settings.uniMERNetPath)."
+        }
+        return "The model is missing from \(model.settings.paddlePaddlePath)."
+    }
+
     private func deletionMessage(for variant: UniMERModelVariant, model: AppModel) -> String {
         if variant.requiresManagedFiles {
             return "This removes the local model files from \(model.settings.uniMERNetPath)."
         }
-        return "This clears local PaddleOCR cached model files when present."
+        return "This removes the local model files from \(model.settings.paddlePaddlePath)."
     }
 }

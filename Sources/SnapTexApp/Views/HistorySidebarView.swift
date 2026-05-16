@@ -4,7 +4,6 @@ import UniformTypeIdentifiers
 
 struct HistorySidebarView: View {
     @ObservedObject var model: AppModel
-    @State private var folderDropTarget: FolderDropTarget?
     @State private var renamingFolderID: HistoryFolder.ID?
 
     var body: some View {
@@ -13,7 +12,6 @@ struct HistorySidebarView: View {
 
             HistoryScopePicker(
                 model: model,
-                folderDropTarget: $folderDropTarget,
                 renamingFolderID: $renamingFolderID
             )
                 .padding(.horizontal, 8)
@@ -59,7 +57,6 @@ struct HistorySidebarView: View {
                             )
                             .id(entry.id)
                             .onDrag {
-                                folderDropTarget = nil
                                 return NSItemProvider(object: HistoryDragPayload.entry(entry.id) as NSString)
                             }
                             .listRowInsets(EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8))
@@ -249,10 +246,7 @@ private struct HistorySortMenuBridge: NSViewRepresentable {
 
 private struct HistoryScopePicker: View {
     @ObservedObject var model: AppModel
-    @Binding var folderDropTarget: FolderDropTarget?
     @Binding var renamingFolderID: HistoryFolder.ID?
-    @State private var draggedFolderID: HistoryFolder.ID?
-    @State private var folderRowFrames: [HistoryFolder.ID: CGRect] = [:]
     @AppStorage("historyFoldersExpanded") private var isFoldersExpanded = true
 
     var body: some View {
@@ -275,7 +269,8 @@ private struct HistoryScopePicker: View {
                 )
 
                 if isFoldersExpanded {
-                    ForEach(model.historyFolders) { folder in
+                    let folderRows = model.historyFolders
+                    ForEach(Array(folderRows.enumerated()), id: \.element.id) { index, folder in
                         HistoryFolderScopeRow(
                             folder: folder,
                             count: model.historyCount(for: .folder(folder.id)),
@@ -285,78 +280,24 @@ private struct HistoryScopePicker: View {
                             select: { model.selectHistoryScope(.folder(folder.id)) },
                             rename: { model.renameHistoryFolder(folder, name: $0) },
                             updateColor: { model.updateHistoryFolderColor(folder, color: $0) },
-                            isDragging: draggedFolderID == folder.id,
-                            isAnyFolderDragging: draggedFolderID != nil,
-                            folderDropTarget: $folderDropTarget,
+                            canMoveUp: index > 0,
+                            canMoveDown: index < folderRows.count - 1,
                             renamingFolderID: $renamingFolderID,
-                            folderDragChanged: { updateFolderDrag(sourceID: folder.id, y: $0) },
-                            folderDragEnded: { finishFolderDrag(sourceID: folder.id, y: $0) },
+                            moveUp: { model.moveHistoryFolderUp(folder.id) },
+                            moveDown: { model.moveHistoryFolderDown(folder.id) },
                             moveDroppedEntries: { model.moveHistoryEntries(withIDs: $0, to: folder.id) },
                             deleteKeepingSnaps: { model.deleteHistoryFolderKeepingSnaps(folder) },
                             deleteWithSnaps: { model.deleteHistoryFolderAndSnaps(folder) }
                         )
-                        .background {
-                            GeometryReader { proxy in
-                                Color.clear.preference(
-                                    key: FolderRowFramePreferenceKey.self,
-                                    value: [folder.id: proxy.frame(in: .named(historyFoldersCoordinateSpace))]
-                                )
-                            }
-                        }
                     }
                 }
             }
-        }
-        .coordinateSpace(name: historyFoldersCoordinateSpace)
-        .onPreferenceChange(FolderRowFramePreferenceKey.self) { frames in
-            folderRowFrames = frames
         }
         .onChange(of: renamingFolderID) { requestedID in
             if requestedID != nil {
                 isFoldersExpanded = true
             }
         }
-    }
-
-    private func updateFolderDrag(sourceID: HistoryFolder.ID, y: CGFloat) {
-        if draggedFolderID != sourceID {
-            draggedFolderID = sourceID
-        }
-        folderDropTarget = folderDropTarget(for: sourceID, dragLocationY: y)
-    }
-
-    private func finishFolderDrag(sourceID: HistoryFolder.ID, y: CGFloat) {
-        defer {
-            draggedFolderID = nil
-            folderDropTarget = nil
-        }
-
-        let target = folderDropTarget ?? folderDropTarget(for: sourceID, dragLocationY: y)
-        guard let target else {
-            return
-        }
-        moveDroppedFolder(sourceID, to: target)
-    }
-
-    private func moveDroppedFolder(_ sourceID: HistoryFolder.ID, to target: FolderDropTarget) {
-        model.moveHistoryFolder(withID: sourceID, relativeTo: target.folderID, placement: target.placement)
-    }
-
-    private func folderDropTarget(for sourceID: HistoryFolder.ID, dragLocationY y: CGFloat) -> FolderDropTarget? {
-        let candidateFolders = model.historyFolders.filter { $0.id != sourceID }
-        for folder in candidateFolders {
-            guard let frame = folderRowFrames[folder.id] else {
-                continue
-            }
-            if y < frame.midY {
-                return FolderDropTarget(folderID: folder.id, placement: .before)
-            }
-        }
-
-        guard let lastFolder = candidateFolders.last else {
-            return nil
-        }
-        return FolderDropTarget(folderID: lastFolder.id, placement: .after)
     }
 }
 
@@ -457,12 +398,11 @@ private struct HistoryFolderScopeRow: View {
     let select: () -> Void
     let rename: (String) -> Void
     let updateColor: (HistoryFolderColor) -> Void
-    let isDragging: Bool
-    let isAnyFolderDragging: Bool
-    @Binding var folderDropTarget: FolderDropTarget?
+    let canMoveUp: Bool
+    let canMoveDown: Bool
     @Binding var renamingFolderID: HistoryFolder.ID?
-    let folderDragChanged: (CGFloat) -> Void
-    let folderDragEnded: (CGFloat) -> Void
+    let moveUp: () -> Void
+    let moveDown: () -> Void
     let moveDroppedEntries: ([OCRHistoryEntry.ID]) -> Void
     let deleteKeepingSnaps: () -> Void
     let deleteWithSnaps: () -> Void
@@ -479,7 +419,6 @@ private struct HistoryFolderScopeRow: View {
             } else {
                 folderRow
                     .simultaneousGesture(TapGesture(count: 2).onEnded { beginRename() })
-                    .simultaneousGesture(folderReorderGesture)
                     .onDrop(of: [UTType.text], isTargeted: $isSnapDropTarget) { providers in
                         providers.loadHistoryEntryIDs(moveDroppedEntries)
                         return true
@@ -493,40 +432,16 @@ private struct HistoryFolderScopeRow: View {
                             deleteWithSnaps: deleteWithSnaps
                         )
                     }
-                    .overlay(alignment: .top) {
-                        if currentDropPlacement == .before {
-                            FolderInsertionIndicator()
-                        }
-                    }
-                    .overlay(alignment: .bottom) {
-                        if currentDropPlacement == .after {
-                            FolderInsertionIndicator()
-                        }
-                    }
-                    .opacity(isDragging ? 0.55 : 1)
             }
         }
         .onAppear(perform: beginRenameIfRequested)
-        .onChange(of: renamingFolderID) { _ in
+        .onChange(of: renamingFolderID) { requestedID in
+            if requestedID != folder.id, isRenaming {
+                saveRename(shouldClearRequestedRename: false)
+                return
+            }
             beginRenameIfRequested()
         }
-    }
-
-    private var folderReorderGesture: some Gesture {
-        DragGesture(minimumDistance: 5, coordinateSpace: .named(historyFoldersCoordinateSpace))
-            .onChanged { value in
-                folderDragChanged(value.location.y)
-            }
-            .onEnded { value in
-                folderDragEnded(value.location.y)
-            }
-    }
-
-    private var currentDropPlacement: HistoryFolderDropPlacement? {
-        guard folderDropTarget?.folderID == folder.id else {
-            return nil
-        }
-        return folderDropTarget?.placement
     }
 
     private var folderRow: some View {
@@ -548,6 +463,21 @@ private struct HistoryFolderScopeRow: View {
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
 
+            HStack(spacing: 2) {
+                HistoryActionButton(
+                    systemName: "chevron.up",
+                    help: "Move folder up",
+                    action: moveUp
+                )
+                .disabled(!canMoveUp)
+
+                HistoryActionButton(
+                    systemName: "chevron.down",
+                    help: "Move folder down",
+                    action: moveDown
+                )
+                .disabled(!canMoveDown)
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
@@ -564,7 +494,7 @@ private struct HistoryFolderScopeRow: View {
     }
 
     private var showsSelectionBackground: Bool {
-        isSelected && !isAnyFolderDragging
+        isSelected
     }
 
     private var renameRow: some View {
@@ -581,9 +511,13 @@ private struct HistoryFolderScopeRow: View {
                 .onAppear {
                     nameFieldFocused = true
                 }
-                .onSubmit(saveRename)
+                .onSubmit {
+                    saveRename()
+                }
 
-            HistoryActionButton(systemName: "checkmark", help: "Save folder name", tint: .green, action: saveRename)
+            HistoryActionButton(systemName: "checkmark", help: "Save folder name", tint: .green) {
+                saveRename()
+            }
             HistoryActionButton(systemName: "xmark", help: "Cancel", action: cancelRename)
         }
         .padding(.horizontal, 8)
@@ -606,15 +540,20 @@ private struct HistoryFolderScopeRow: View {
     }
 
     private func beginRename() {
+        if renamingFolderID != folder.id {
+            renamingFolderID = folder.id
+        }
         draftName = folder.name
         withAnimation(.easeOut(duration: 0.12)) {
             isRenaming = true
         }
     }
 
-    private func saveRename() {
+    private func saveRename(shouldClearRequestedRename: Bool = true) {
         rename(draftName)
-        clearRequestedRename()
+        if shouldClearRequestedRename {
+            clearRequestedRename()
+        }
         withAnimation(.easeOut(duration: 0.12)) {
             isRenaming = false
         }
@@ -631,35 +570,6 @@ private struct HistoryFolderScopeRow: View {
         if renamingFolderID == folder.id {
             renamingFolderID = nil
         }
-    }
-}
-
-private let historyFoldersCoordinateSpace = "history-folders"
-
-private struct FolderRowFramePreferenceKey: PreferenceKey {
-    static var defaultValue: [HistoryFolder.ID: CGRect] = [:]
-
-    static func reduce(
-        value: inout [HistoryFolder.ID: CGRect],
-        nextValue: () -> [HistoryFolder.ID: CGRect]
-    ) {
-        value.merge(nextValue(), uniquingKeysWith: { _, newValue in newValue })
-    }
-}
-
-private struct FolderDropTarget: Equatable {
-    let folderID: HistoryFolder.ID
-    let placement: HistoryFolderDropPlacement
-}
-
-private struct FolderInsertionIndicator: View {
-    var body: some View {
-        RoundedRectangle(cornerRadius: 1)
-            .fill(Color.accentColor)
-            .frame(height: 2)
-            .padding(.horizontal, 6)
-            .offset(y: 0)
-            .allowsHitTesting(false)
     }
 }
 
@@ -1167,16 +1077,32 @@ private struct HistoryActionButtonStyle: ButtonStyle {
     let isHovered: Bool
     let tint: Color
 
+    @Environment(\.isEnabled) private var isEnabled
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .foregroundColor(isHovered || configuration.isPressed ? tint : .secondary)
+            .foregroundColor(foregroundColor(configuration: configuration))
             .background {
                 RoundedRectangle(cornerRadius: 5)
-                    .fill(tint.opacity(configuration.isPressed ? 0.18 : isHovered ? 0.10 : 0))
+                    .fill(backgroundColor(configuration: configuration))
             }
             .scaleEffect(configuration.isPressed ? 0.96 : 1)
             .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
             .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+
+    private func foregroundColor(configuration: Configuration) -> Color {
+        guard isEnabled else {
+            return .secondary.opacity(0.35)
+        }
+        return isHovered || configuration.isPressed ? tint : .secondary
+    }
+
+    private func backgroundColor(configuration: Configuration) -> Color {
+        guard isEnabled else {
+            return Color.clear
+        }
+        return tint.opacity(configuration.isPressed ? 0.18 : isHovered ? 0.10 : 0)
     }
 }
 

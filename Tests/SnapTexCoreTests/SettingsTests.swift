@@ -11,6 +11,10 @@ final class SettingsTests: XCTestCase {
             settings.uniMERNetPath
         )
         XCTAssertTrue(
+            settings.paddlePaddlePath.hasSuffix("/Library/Application Support/snaptex/PaddlePaddle"),
+            settings.paddlePaddlePath
+        )
+        XCTAssertTrue(
             settings.workerScriptPath.hasSuffix("python/snaptex_worker/worker.py"),
             settings.workerScriptPath
         )
@@ -18,18 +22,26 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(.fast, settings.recognitionMode)
         XCTAssertTrue(settings.validateRender)
         XCTAssertEqual(.defaultSnip, settings.snipShortcut)
-        XCTAssertEqual("⌘⇧1", settings.snipShortcut.displayText)
+        XCTAssertEqual("⌘⇧S", settings.snipShortcut.displayText)
         XCTAssertEqual(.defaultOpenApp, settings.openAppShortcut)
         XCTAssertEqual("⌘⇧O", settings.openAppShortcut.displayText)
-        XCTAssertEqual(13, settings.historyTitleFontSize)
-        XCTAssertEqual(12, settings.labelFontSize)
-        XCTAssertEqual(13, settings.paneTitleFontSize)
+        XCTAssertEqual(12, settings.historyTitleFontSize)
+        XCTAssertEqual(14, settings.labelFontSize)
+        XCTAssertEqual(15, settings.paneTitleFontSize)
         XCTAssertEqual(12, settings.toolbarFontSize)
         XCTAssertEqual(11, settings.metadataFontSize)
-        XCTAssertEqual(14, settings.latexEditorFontSize)
+        XCTAssertEqual(15, settings.latexEditorFontSize)
         XCTAssertEqual(.monospaced, settings.latexEditorFontFamily)
         XCTAssertEqual("SF Mono", settings.latexEditorFontFamily.title)
         XCTAssertEqual(.normal, settings.logVerbosity)
+    }
+
+    func testDefaultSettingsEncodeSnipButtonFontSize() throws {
+        let data = try JSONEncoder().encode(AppSettingsSnapshot.default)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(20, payload["snipButtonFontSize"] as? Int)
+        XCTAssertEqual(AppSettingsSnapshot.default.paddlePaddlePath, payload["paddlePaddlePath"] as? String)
     }
 
     func testDefaultUniMERNetPathUsesMacApplicationSupport() {
@@ -59,6 +71,24 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual("/Users/example/snaptex/UniMERNet", path)
     }
 
+    func testDefaultPaddlePaddlePathUsesMacApplicationSupport() {
+        let path = AppSettingsSnapshot.defaultPaddlePaddlePath(
+            environment: [:],
+            homeDirectory: URL(fileURLWithPath: "/Users/example")
+        )
+
+        XCTAssertEqual("/Users/example/Library/Application Support/snaptex/PaddlePaddle", path)
+    }
+
+    func testDefaultPaddlePaddlePathHonorsEnvironmentOverride() {
+        let path = AppSettingsSnapshot.defaultPaddlePaddlePath(
+            environment: ["SNAPTEX_PADDLEPADDLE_DIR": "~/snaptex/PaddlePaddle"],
+            homeDirectory: URL(fileURLWithPath: "/Users/example")
+        )
+
+        XCTAssertEqual("/Users/example/snaptex/PaddlePaddle", path)
+    }
+
     func testModelVariantDetectsInstalledModelLayouts() throws {
         let root = try makeTemporaryDirectory()
 
@@ -74,6 +104,45 @@ final class SettingsTests: XCTestCase {
             withIntermediateDirectories: true
         )
         FileManager.default.createFile(atPath: nestedModel.path, contents: Data())
+
+        XCTAssertTrue(model.isInstalled(in: root.path))
+    }
+
+    func testModelVariantUsesStructuredModelDirectories() throws {
+        let root = try makeTemporaryDirectory()
+        let uniMERNetModel = OCRModelSelection(provider: .uniMERNet, size: .medium)
+        let paddleModel = OCRModelSelection(provider: .paddlePaddle, size: .large)
+
+        XCTAssertEqual(
+            root
+                .appendingPathComponent("models")
+                .appendingPathComponent("unimernet")
+                .appendingPathComponent("m"),
+            uniMERNetModel.modelDirectory(in: root.path)
+        )
+        XCTAssertEqual(
+            root
+                .appendingPathComponent("models")
+                .appendingPathComponent("paddlepaddle")
+                .appendingPathComponent("official_models")
+                .appendingPathComponent("PP-FormulaNet_plus-L"),
+            paddleModel.modelDirectory(in: root.path)
+        )
+    }
+
+    func testModelVariantDetectsStructuredInstalledModelLayout() throws {
+        let root = try makeTemporaryDirectory()
+        let model = OCRModelSelection(provider: .uniMERNet, size: .large)
+        let modelFile = root
+            .appendingPathComponent("models")
+            .appendingPathComponent("unimernet")
+            .appendingPathComponent("l")
+            .appendingPathComponent("pytorch_model.pth")
+        try FileManager.default.createDirectory(
+            at: modelFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: modelFile.path, contents: Data())
 
         XCTAssertTrue(model.isInstalled(in: root.path))
     }
@@ -99,7 +168,7 @@ final class SettingsTests: XCTestCase {
         let model = OCRModelSelection(provider: .paddlePaddle, size: .large)
 
         XCTAssertFalse(model.requiresManagedFiles)
-        XCTAssertTrue(model.isInstalled(in: root.path))
+        XCTAssertFalse(model.isInstalled(in: root.path))
         XCTAssertEqual("PP-FormulaNet_plus-L", model.workerModelName)
     }
 
@@ -175,14 +244,23 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(OCRModelSelection(provider: .uniMERNet, size: .medium), settings.modelVariant)
         XCTAssertEqual(.defaultSnip, settings.snipShortcut)
         XCTAssertEqual(.defaultOpenApp, settings.openAppShortcut)
-        XCTAssertEqual(13, settings.historyTitleFontSize)
-        XCTAssertEqual(12, settings.labelFontSize)
-        XCTAssertEqual(13, settings.paneTitleFontSize)
+        XCTAssertEqual(12, settings.historyTitleFontSize)
+        XCTAssertEqual(14, settings.labelFontSize)
+        XCTAssertEqual(15, settings.paneTitleFontSize)
         XCTAssertEqual(12, settings.toolbarFontSize)
         XCTAssertEqual(11, settings.metadataFontSize)
-        XCTAssertEqual(14, settings.latexEditorFontSize)
+        XCTAssertEqual(15, settings.latexEditorFontSize)
         XCTAssertEqual(.monospaced, settings.latexEditorFontFamily)
         XCTAssertEqual(.normal, settings.logVerbosity)
+        XCTAssertTrue(
+            settings.paddlePaddlePath.hasSuffix("/Library/Application Support/snaptex/PaddlePaddle"),
+            settings.paddlePaddlePath
+        )
+
+        let encodedData = try JSONEncoder().encode(settings)
+        let encodedPayload = try XCTUnwrap(JSONSerialization.jsonObject(with: encodedData) as? [String: Any])
+        XCTAssertEqual(20, encodedPayload["snipButtonFontSize"] as? Int)
+        XCTAssertEqual(settings.paddlePaddlePath, encodedPayload["paddlePaddlePath"] as? String)
     }
 
     func testDecodedSettingsRepairMissingLegacyWorkerScriptPath() throws {
@@ -243,6 +321,29 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(17, decoded.paneTitleFontSize)
         XCTAssertEqual(15, decoded.toolbarFontSize)
         XCTAssertEqual(10, decoded.metadataFontSize)
+    }
+
+    func testSettingsPersistSnipButtonFontSize() throws {
+        let json = """
+        {
+          "condaPath": "conda",
+          "environmentName": "snaptex",
+          "uniMERNetPath": "/tmp/UniMERNet",
+          "modelVariant": "small",
+          "recognitionMode": "balanced",
+          "outputFormat": "raw",
+          "autoCopyAfterRecognition": false,
+          "historyLimit": 32,
+          "snipButtonFontSize": 19,
+          "workerScriptPath": "/tmp/worker.py"
+        }
+        """
+
+        let settings = try JSONDecoder().decode(AppSettingsSnapshot.self, from: Data(json.utf8))
+        let data = try JSONEncoder().encode(settings)
+        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+
+        XCTAssertEqual(19, payload["snipButtonFontSize"] as? Int)
     }
 
     func testEncodedSettingsPreserveUnlimitedHistoryMode() throws {

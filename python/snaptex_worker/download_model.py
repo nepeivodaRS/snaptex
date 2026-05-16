@@ -2,16 +2,30 @@ import argparse
 import inspect
 import json
 import os
+import shutil
 from pathlib import Path
 
 from tqdm.auto import tqdm
 
 
+MODEL_PROVIDERS = ("unimernet", "paddlepaddle")
 MODEL_VARIANTS = ("tiny", "small", "base")
+PADDLE_CONFIG_FILENAME = "inference.yml"
 MODEL_SIZE_ALIASES = {
     "s": "tiny",
     "m": "small",
     "l": "base",
+}
+PADDLE_MODEL_ALIASES = {
+    "s": "PP-FormulaNet_plus-S",
+    "m": "PP-FormulaNet_plus-M",
+    "l": "PP-FormulaNet_plus-L",
+    "small": "PP-FormulaNet_plus-S",
+    "medium": "PP-FormulaNet_plus-M",
+    "large": "PP-FormulaNet_plus-L",
+    "PP-FormulaNet_plus-S": "PP-FormulaNet_plus-S",
+    "PP-FormulaNet_plus-M": "PP-FormulaNet_plus-M",
+    "PP-FormulaNet_plus-L": "PP-FormulaNet_plus-L",
 }
 
 
@@ -43,6 +57,26 @@ def normalize_unimernet_variant(value):
     if variant not in MODEL_VARIANTS:
         raise ValueError(f"Unknown UniMERNet model variant: {value}")
     return variant
+
+
+def normalize_unimernet_storage_name(value):
+    variant = normalize_unimernet_variant(value)
+    return {
+        "tiny": "s",
+        "small": "m",
+        "base": "l",
+    }[variant]
+
+
+def normalize_paddle_model_name(value):
+    trimmed = value.strip()
+    model_name = PADDLE_MODEL_ALIASES.get(
+        trimmed,
+        PADDLE_MODEL_ALIASES.get(trimmed.lower()),
+    )
+    if not model_name:
+        raise ValueError(f"Unknown PaddlePaddle model variant: {value}")
+    return model_name
 
 
 class JsonProgress(tqdm):
@@ -78,9 +112,19 @@ class JsonProgress(tqdm):
         )
 
 
-def download_model(variant, models_dir, progress_json=False):
+def download_model(variant, models_dir, provider="unimernet", progress_json=False):
+    provider = provider.strip().lower()
+    if provider == "unimernet":
+        return download_unimernet_model(variant, models_dir, progress_json=progress_json)
+    if provider == "paddlepaddle":
+        return download_paddle_model(variant, models_dir, progress_json=progress_json)
+    raise ValueError(f"Unknown model provider: {provider}")
+
+
+def download_unimernet_model(variant, models_dir, progress_json=False):
+    storage_name = normalize_unimernet_storage_name(variant)
     variant = normalize_unimernet_variant(variant)
-    target = Path(models_dir).expanduser().resolve() / f"unimernet_{variant}"
+    target = Path(models_dir).expanduser().resolve() / "unimernet" / storage_name
     target.mkdir(parents=True, exist_ok=True)
 
     if progress_json:
@@ -103,14 +147,63 @@ def download_model(variant, models_dir, progress_json=False):
     return target
 
 
+def download_paddle_model(variant, models_dir, progress_json=False):
+    model_name = normalize_paddle_model_name(variant)
+    cache_home = Path(models_dir).expanduser().resolve() / "paddlepaddle"
+    target = cache_home / "official_models" / model_name
+    cache_home.mkdir(parents=True, exist_ok=True)
+    os.environ["PADDLE_PDX_CACHE_HOME"] = str(cache_home)
+    remove_invalid_paddle_cache(target)
+
+    if progress_json:
+        print(json.dumps({"event": "progress", "progress": 0}), flush=True)
+
+    formula_recognition = import_formula_recognition()
+    formula_recognition(model_name=model_name)
+
+    if progress_json:
+        print(json.dumps({"event": "progress", "progress": 1}), flush=True)
+        print(json.dumps({"event": "complete", "path": str(target)}), flush=True)
+    else:
+        print(target)
+
+    return target
+
+
+def remove_invalid_paddle_cache(target):
+    if not target.exists() or paddle_model_cache_is_valid(target):
+        return
+    if target.is_dir():
+        shutil.rmtree(target)
+    else:
+        target.unlink()
+
+
+def paddle_model_cache_is_valid(target):
+    return (target / PADDLE_CONFIG_FILENAME).is_file()
+
+
 def import_snapshot_download():
     from huggingface_hub import snapshot_download
 
     return snapshot_download
 
 
+def import_formula_recognition():
+    try:
+        from paddleocr import FormulaRecognition
+    except ImportError as exc:
+        raise ImportError(
+            "PaddleOCR is not installed in this Python environment. Install it with "
+            "`python -m pip install paddlepaddle==3.0.0` and "
+            "`python -m pip install paddleocr`."
+        ) from exc
+    return FormulaRecognition
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Download UniMERNet model files")
+    parser = argparse.ArgumentParser(description="Download OCR model files")
+    parser.add_argument("--provider", choices=MODEL_PROVIDERS, default="unimernet")
     parser.add_argument("--variant", default="m")
     parser.add_argument(
         "--models-dir",
@@ -127,6 +220,7 @@ def main():
         download_model(
             variant=args.variant,
             models_dir=args.models_dir,
+            provider=args.provider,
             progress_json=args.progress_json,
         )
     except ValueError as exc:

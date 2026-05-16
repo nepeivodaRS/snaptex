@@ -49,6 +49,7 @@ struct SettingsView: View {
                             action: {
                                 model.selectModelVariant(variant)
                             },
+                            isDownloadBlocked: model.isModelDownloadBlocked(for: variant),
                             canRevealFiles: model.canRevealModelFiles(variant),
                             revealAction: {
                                 model.revealModelFilesInFinder(variant)
@@ -151,8 +152,16 @@ struct SettingsView: View {
 
             SettingsFontRow(
                 title: "Toolbar controls",
-                description: "Top bar buttons, model controls, and status",
+                description: "Model controls and status",
                 value: toolbarFontSizeBinding
+            )
+
+            Divider()
+
+            SettingsFontRow(
+                title: "Snip button",
+                description: "Main capture button text",
+                value: snipButtonFontSizeBinding
             )
 
             Divider()
@@ -262,6 +271,13 @@ struct SettingsView: View {
         )
     }
 
+    private var snipButtonFontSizeBinding: Binding<Int> {
+        Binding(
+            get: { model.settings.snipButtonFontSize },
+            set: { model.settings.snipButtonFontSize = AppSettingsSnapshot.clampedFontSize($0) }
+        )
+    }
+
     private var metadataFontSizeBinding: Binding<Int> {
         Binding(
             get: { model.settings.metadataFontSize },
@@ -333,6 +349,7 @@ private struct ModelManagementRow: View {
     let state: ManagedModelState
     let isSelected: Bool
     let action: () -> Void
+    let isDownloadBlocked: Bool
     let canRevealFiles: Bool
     let revealAction: () -> Void
     let deleteAction: () -> Void
@@ -374,7 +391,11 @@ private struct ModelManagementRow: View {
                         .frame(width: 70)
                 }
                 .buttonStyle(GraphiteSecondaryButtonStyle())
-                .disabled(state.isDownloading || (state.isInstalled && isSelected))
+                .disabled(
+                    isDownloadBlocked ||
+                    state.isDownloading ||
+                    (isSelected && state.isInstalled)
+                )
 
                 SettingsIconActionButton(
                     systemImage: "folder",
@@ -635,7 +656,7 @@ private struct SettingsFontRow: View {
             HStack(spacing: 8) {
                 TextField("", value: $value, formatter: Self.fontSizeFormatter)
                     .multilineTextAlignment(.trailing)
-                    .graphiteTextInput(width: 76)
+                    .graphiteTextInput(width: 76, background: AppTheme.windowBackground)
 
                 Text("pt")
                     .foregroundStyle(.secondary)

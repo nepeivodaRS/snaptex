@@ -21,6 +21,7 @@ INFO_PLIST="$APP_CONTENTS/Info.plist"
 ICON_SOURCE="$ROOT_DIR/Sources/SnapTexApp/Resources/logo.png"
 MATHJAX_SOURCE="$ROOT_DIR/Sources/SnapTexApp/Resources/MathJax.js"
 PYTHON_SOURCE="$ROOT_DIR/python/snaptex_worker"
+UNIMERNET_RUNTIME_SOURCE="${SNAPTEX_UNIMERNET_RUNTIME_DIR:-${UNIMERNET_RUNTIME_DIR:-}}"
 
 installed_bundle_id() {
   if [[ -d "$INSTALL_BUNDLE" ]]; then
@@ -33,6 +34,19 @@ strip_quarantine() {
   if command -v xattr >/dev/null 2>&1; then
     xattr -dr com.apple.quarantine "$path" >/dev/null 2>&1 || true
   fi
+}
+
+find_unimernet_runtime_source() {
+  local candidate
+  for candidate in \
+    "$UNIMERNET_RUNTIME_SOURCE" \
+    "$ROOT_DIR/../UniMERNet" \
+    "$ROOT_DIR/UniMERNet"; do
+    if [[ -n "$candidate" && -d "$candidate/unimernet" && -d "$candidate/configs/val" ]]; then
+      printf '%s\n' "$candidate"
+      return
+    fi
+  done
 }
 
 EXISTING_BUNDLE_ID="$(installed_bundle_id)"
@@ -87,6 +101,15 @@ fi
 if [[ -d "$PYTHON_SOURCE" ]]; then
   mkdir -p "$APP_RESOURCES/python"
   ditto "$PYTHON_SOURCE" "$APP_RESOURCES/python/snaptex_worker"
+  find "$APP_RESOURCES/python" -name __pycache__ -type d -prune -exec rm -rf {} +
+fi
+
+UNIMERNET_RUNTIME="$(find_unimernet_runtime_source || true)"
+if [[ -n "$UNIMERNET_RUNTIME" ]]; then
+  mkdir -p "$APP_RESOURCES/UniMERNet"
+  ditto "$UNIMERNET_RUNTIME/unimernet" "$APP_RESOURCES/UniMERNet/unimernet"
+  ditto "$UNIMERNET_RUNTIME/configs" "$APP_RESOURCES/UniMERNet/configs"
+  find "$APP_RESOURCES/UniMERNet" -name __pycache__ -type d -prune -exec rm -rf {} +
 fi
 
 strip_quarantine "$APP_BUNDLE"

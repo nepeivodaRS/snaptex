@@ -10,9 +10,7 @@ struct CapturePreviewPane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Capture")
-                .font(paneTitleFont)
-                .foregroundStyle(.primary)
+            captureHeader
 
             captureSurface
 
@@ -21,6 +19,18 @@ struct CapturePreviewPane: View {
             previewSurface
         }
         .padding(14)
+    }
+
+    private var captureHeader: some View {
+        HStack(alignment: .center) {
+            Text("Capture")
+                .font(paneTitleFont)
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            CaptureHeaderActions(model: model)
+        }
     }
 
     private var captureSurface: some View {
@@ -177,6 +187,35 @@ struct CapturePreviewPane: View {
             previewZoomControls.frame(height: renderedOutputActionHeight, alignment: .center)
         }
         .frame(height: renderedOutputActionHeight, alignment: .center)
+    }
+}
+
+private struct CaptureHeaderActions: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Button {
+                model.retry()
+            } label: {
+                Label("Retry", systemImage: "arrow.clockwise")
+                    .frame(minWidth: AppLayoutMetrics.captureHeaderActionButtonMinWidth)
+            }
+            .buttonStyle(GraphiteSecondaryButtonStyle())
+            .disabled(!model.canRetry)
+            .help("Run OCR again on the last input")
+
+            Button {
+                model.pasteImageFromClipboard()
+            } label: {
+                Label("Add", systemImage: "plus")
+                    .frame(minWidth: AppLayoutMetrics.captureHeaderActionButtonMinWidth)
+            }
+            .buttonStyle(GraphiteSecondaryButtonStyle())
+            .disabled(model.isSnipping || !model.canPasteImage)
+            .help("Add an image from the clipboard")
+        }
+        .fixedSize(horizontal: true, vertical: false)
     }
 }
 

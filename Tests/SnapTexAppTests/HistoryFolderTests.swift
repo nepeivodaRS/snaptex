@@ -196,6 +196,26 @@ final class HistoryFolderTests: XCTestCase {
         XCTAssertEqual([top.id, bottom.id], model.historyFolders.map(\.id))
     }
 
+    func testFoldersCanMoveUpAndDownOneStepWithBoundaryGuards() {
+        let model = AppModel()
+        let bottom = model.createHistoryFolder(named: "Bottom")
+        let middle = model.createHistoryFolder(named: "Middle")
+        let top = model.createHistoryFolder(named: "Top")
+
+        model.moveHistoryFolderDown(top.id)
+        XCTAssertEqual([middle.id, top.id, bottom.id], model.historyFolders.map(\.id))
+
+        model.moveHistoryFolderUp(top.id)
+        XCTAssertEqual([top.id, middle.id, bottom.id], model.historyFolders.map(\.id))
+
+        model.moveHistoryFolderUp(top.id)
+        XCTAssertEqual([top.id, middle.id, bottom.id], model.historyFolders.map(\.id))
+
+        model.moveHistoryFolderDown(bottom.id)
+        XCTAssertEqual([top.id, middle.id, bottom.id], model.historyFolders.map(\.id))
+        XCTAssertEqual("Moved folder", model.status)
+    }
+
     func testDefaultFolderNameUsesFolderTerminology() {
         let model = AppModel()
 

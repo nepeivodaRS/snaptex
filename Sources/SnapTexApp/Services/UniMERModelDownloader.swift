@@ -30,7 +30,8 @@ struct UniMERModelDownloader: UniMERModelDownloading {
         progressHandler: @escaping (Double?) -> Void
     ) throws {
         let pythonPath = try configuration.resolvedPythonPath()
-        let modelsDirectory = URL(fileURLWithPath: configuration.uniMERNetPath)
+        let modelRootPath = modelRootPath(for: variant, configuration: configuration)
+        let modelsDirectory = URL(fileURLWithPath: modelRootPath)
             .appendingPathComponent("models")
         try FileManager.default.createDirectory(
             at: modelsDirectory,
@@ -43,8 +44,10 @@ struct UniMERModelDownloader: UniMERModelDownloading {
         process.arguments = [
             "-m",
             "snaptex_worker.download_model",
+            "--provider",
+            variant.provider.rawValue,
             "--variant",
-            variant.workerModelName,
+            downloadVariantName(for: variant),
             "--models-dir",
             modelsDirectory.path,
             "--progress-json"
@@ -54,7 +57,10 @@ struct UniMERModelDownloader: UniMERModelDownloading {
         process.standardError = outputPipe
 
         try process.run()
-        let output = readOutput(from: outputPipe.fileHandleForReading, progressHandler: progressHandler)
+        let output = readOutput(
+            from: outputPipe.fileHandleForReading,
+            progressHandler: progressHandler
+        )
         process.waitUntilExit()
 
         guard process.terminationStatus == 0 else {
@@ -113,10 +119,34 @@ struct UniMERModelDownloader: UniMERModelDownloading {
 
     private func handleLine(_ line: String, progressHandler: (Double?) -> Void) {
         guard let data = line.data(using: .utf8),
-              let event = try? JSONDecoder().decode(ModelDownloadProgressEvent.self, from: data) else {
+              let event = try? JSONDecoder().decode(
+                ModelDownloadProgressEvent.self,
+                from: data
+              ) else {
             return
         }
         progressHandler(event.progress)
+    }
+
+    private func modelRootPath(
+        for variant: UniMERModelVariant,
+        configuration: OCRWorkerConfiguration
+    ) -> String {
+        switch variant.provider {
+        case .uniMERNet:
+            return configuration.uniMERNetPath
+        case .paddlePaddle:
+            return configuration.paddlePaddlePath
+        }
+    }
+
+    private func downloadVariantName(for variant: UniMERModelVariant) -> String {
+        switch variant.provider {
+        case .uniMERNet:
+            return variant.size.rawValue
+        case .paddlePaddle:
+            return variant.workerModelName
+        }
     }
 }
 

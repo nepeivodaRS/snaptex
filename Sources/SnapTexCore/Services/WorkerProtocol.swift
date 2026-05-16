@@ -4,6 +4,7 @@ public struct UniMERWorkerRequest: Codable, Equatable, Sendable {
     public let imagePath: String
     public let mode: RecognitionMode
     public let model: UniMERModelVariant
+    public let modelStoragePath: String?
     public let validateRender: Bool
     public let logVerbosity: LogVerbosity
 
@@ -11,12 +12,14 @@ public struct UniMERWorkerRequest: Codable, Equatable, Sendable {
         imagePath: String,
         mode: RecognitionMode,
         model: UniMERModelVariant,
+        modelStoragePath: String? = nil,
         validateRender: Bool,
         logVerbosity: LogVerbosity = .normal
     ) {
         self.imagePath = imagePath
         self.mode = mode
         self.model = model
+        self.modelStoragePath = modelStoragePath
         self.validateRender = validateRender
         self.logVerbosity = logVerbosity
     }
@@ -25,6 +28,7 @@ public struct UniMERWorkerRequest: Codable, Equatable, Sendable {
         case imagePath = "image_path"
         case mode
         case model
+        case modelStoragePath = "model_storage_path"
         case validateRender = "validate_render"
         case logVerbosity = "log_verbosity"
     }

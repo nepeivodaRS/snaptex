@@ -33,9 +33,6 @@ enum ManagedModelState: Equatable {
         if case .installed = self {
             return true
         }
-        if case .available = self {
-            return true
-        }
         return false
     }
 

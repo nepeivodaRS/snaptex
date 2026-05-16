@@ -97,38 +97,7 @@ private struct ToolbarActionStrip: View {
     var body: some View {
         HStack(spacing: 8) {
             SnipButton(model: model)
-
-            Button {
-                model.pasteImageFromClipboard()
-            } label: {
-                Label("Paste", systemImage: "doc.on.clipboard")
-                    .frame(minWidth: AppLayoutMetrics.toolbarActionButtonMinWidth)
-            }
-            .buttonStyle(GraphiteSecondaryButtonStyle())
-            .disabled(model.isSnipping || !model.canPasteImage)
-            .help("Run OCR on an image from the clipboard")
-
-            Button {
-                model.retry()
-            } label: {
-                Label("Retry", systemImage: "arrow.clockwise")
-                    .frame(minWidth: AppLayoutMetrics.toolbarActionButtonMinWidth)
-            }
-            .buttonStyle(GraphiteSecondaryButtonStyle())
-            .disabled(!model.canRetry)
-            .help("Run OCR again on the last input")
-
-            Button {
-                model.copyLatex()
-            } label: {
-                Label("Copy", systemImage: "doc.on.doc")
-                    .frame(minWidth: AppLayoutMetrics.toolbarActionButtonMinWidth)
-            }
-            .buttonStyle(GraphiteSecondaryButtonStyle())
-            .disabled(!model.canCopy)
-            .help("Copy visible LaTeX")
         }
-        .font(.system(size: CGFloat(model.settings.toolbarFontSize)))
         .fixedSize(horizontal: true, vertical: false)
     }
 }
@@ -376,6 +345,7 @@ private struct SnipButton: View {
             model.snip()
         } label: {
             Label("Snip", systemImage: "crop")
+                .font(.system(size: CGFloat(model.settings.snipButtonFontSize), weight: .semibold))
                 .frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)
         }
         .buttonStyle(GraphitePrimaryButtonStyle())

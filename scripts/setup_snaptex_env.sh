@@ -5,7 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_NAME="${SNAPTEX_ENV_NAME:-${ENV_NAME:-snaptex}}"
 MODEL_VARIANT="${SNAPTEX_MODEL_SIZE:-${MODEL_SIZE:-${SNAPTEX_MODEL_VARIANT:-${MODEL_VARIANT:-m}}}}"
 APP_SUPPORT_DIR="${SNAPTEX_APP_SUPPORT_DIR:-$HOME/Library/Application Support/snaptex}"
-UNIMERNET_DIR="${SNAPTEX_UNIMERNET_DIR:-${UNIMERNET_DIR:-$APP_SUPPORT_DIR/UniMERNet}}"
+UNIMERNET_MODEL_DIR="${SNAPTEX_UNIMERNET_DIR:-$APP_SUPPORT_DIR/UniMERNet}"
+UNIMERNET_RUNTIME_DIR="${SNAPTEX_UNIMERNET_RUNTIME_DIR:-${UNIMERNET_RUNTIME_DIR:-${UNIMERNET_DIR:-$UNIMERNET_MODEL_DIR/runtime}}}"
 
 find_conda() {
   if [[ -n "${CONDA_EXE:-}" && -x "${CONDA_EXE:-}" ]]; then
@@ -49,22 +50,23 @@ if [[ ! -x "$PYTHON_BIN" ]]; then
   "$CONDA_BIN" create -y -n "$ENV_NAME" python=3.10
 fi
 
-if [[ -d "$UNIMERNET_DIR/.git" || -d "$UNIMERNET_DIR/unimernet" ]]; then
-  echo "Using UniMERNet source at $UNIMERNET_DIR"
-elif [[ -e "$UNIMERNET_DIR" ]]; then
-  echo "$UNIMERNET_DIR exists but does not look like a UniMERNet checkout." >&2
+if [[ -d "$UNIMERNET_RUNTIME_DIR/.git" || -d "$UNIMERNET_RUNTIME_DIR/unimernet" ]]; then
+  echo "Using UniMERNet runtime at $UNIMERNET_RUNTIME_DIR"
+elif [[ -e "$UNIMERNET_RUNTIME_DIR" ]]; then
+  echo "$UNIMERNET_RUNTIME_DIR exists but does not look like a UniMERNet checkout." >&2
   exit 1
 else
-  mkdir -p "$(dirname "$UNIMERNET_DIR")"
-  git clone --depth 1 https://github.com/opendatalab/UniMERNet.git "$UNIMERNET_DIR"
+  mkdir -p "$(dirname "$UNIMERNET_RUNTIME_DIR")"
+  git clone --depth 1 https://github.com/opendatalab/UniMERNet.git "$UNIMERNET_RUNTIME_DIR"
 fi
 
 PYTHONNOUSERSITE=1 "$PYTHON_BIN" -m pip install --no-cache-dir paddlepaddle==3.0.0 -i https://www.paddlepaddle.org.cn/packages/stable/cpu/
 PYTHONNOUSERSITE=1 "$PYTHON_BIN" -m pip install --no-cache-dir -r "$ROOT_DIR/python/requirements.txt"
 PYTHONNOUSERSITE=1 "$PYTHON_BIN" "$ROOT_DIR/scripts/download_model.py" \
   --variant "$MODEL_VARIANT" \
-  --models-dir "$UNIMERNET_DIR/models"
+  --models-dir "$UNIMERNET_MODEL_DIR/models"
 
 echo "Environment: $ENV_NAME"
 echo "Python: $PYTHON_BIN"
-echo "UniMERNet: $UNIMERNET_DIR"
+echo "UniMERNet runtime: $UNIMERNET_RUNTIME_DIR"
+echo "UniMERNet models: $UNIMERNET_MODEL_DIR"

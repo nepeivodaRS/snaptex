@@ -54,6 +54,7 @@ struct GraphiteSecondaryButtonStyle: ButtonStyle {
 
 struct GraphiteTextInputModifier: ViewModifier {
     let width: CGFloat
+    var background: Color = AppTheme.controlBackground
 
     func body(content: Content) -> some View {
         content
@@ -61,7 +62,7 @@ struct GraphiteTextInputModifier: ViewModifier {
             .controlSize(.small)
             .padding(.horizontal, 7)
             .frame(width: width, height: 24)
-            .background(AppTheme.controlBackground.opacity(0.90))
+            .background(background)
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .overlay {
                 RoundedRectangle(cornerRadius: 6)
@@ -169,7 +170,10 @@ extension View {
         modifier(GraphitePanelModifier(background: background, border: border, radius: radius))
     }
 
-    func graphiteTextInput(width: CGFloat) -> some View {
-        modifier(GraphiteTextInputModifier(width: width))
+    func graphiteTextInput(
+        width: CGFloat,
+        background: Color = AppTheme.controlBackground
+    ) -> some View {
+        modifier(GraphiteTextInputModifier(width: width, background: background))
     }
 }

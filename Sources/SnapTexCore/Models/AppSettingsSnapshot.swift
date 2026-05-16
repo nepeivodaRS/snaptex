@@ -4,6 +4,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
     public var condaPath: String
     public var environmentName: String
     public var uniMERNetPath: String
+    public var paddlePaddlePath: String
     public var modelVariant: UniMERModelVariant
     public var recognitionMode: RecognitionMode
     public var outputFormat: LaTeXOutputFormat
@@ -15,6 +16,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
     public var labelFontSize: Int
     public var paneTitleFontSize: Int
     public var toolbarFontSize: Int
+    public var snipButtonFontSize: Int
     public var metadataFontSize: Int
     public var latexEditorFontSize: Int
     public var latexEditorFontFamily: LaTeXEditorFontFamily
@@ -27,6 +29,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         condaPath: String,
         environmentName: String,
         uniMERNetPath: String,
+        paddlePaddlePath: String,
         modelVariant: UniMERModelVariant,
         recognitionMode: RecognitionMode,
         outputFormat: LaTeXOutputFormat,
@@ -38,6 +41,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         labelFontSize: Int,
         paneTitleFontSize: Int,
         toolbarFontSize: Int,
+        snipButtonFontSize: Int,
         metadataFontSize: Int,
         latexEditorFontSize: Int,
         latexEditorFontFamily: LaTeXEditorFontFamily,
@@ -49,6 +53,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         self.condaPath = condaPath
         self.environmentName = environmentName
         self.uniMERNetPath = uniMERNetPath
+        self.paddlePaddlePath = paddlePaddlePath
         self.modelVariant = modelVariant
         self.recognitionMode = recognitionMode
         self.outputFormat = outputFormat
@@ -60,6 +65,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         self.labelFontSize = Self.clampedFontSize(labelFontSize)
         self.paneTitleFontSize = Self.clampedFontSize(paneTitleFontSize)
         self.toolbarFontSize = Self.clampedFontSize(toolbarFontSize)
+        self.snipButtonFontSize = Self.clampedFontSize(snipButtonFontSize)
         self.metadataFontSize = Self.clampedFontSize(metadataFontSize)
         self.latexEditorFontSize = Self.clampedFontSize(latexEditorFontSize)
         self.latexEditorFontFamily = latexEditorFontFamily
@@ -73,6 +79,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         case condaPath
         case environmentName
         case uniMERNetPath
+        case paddlePaddlePath
         case modelVariant
         case recognitionMode
         case outputFormat
@@ -84,6 +91,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         case labelFontSize
         case paneTitleFontSize
         case toolbarFontSize
+        case snipButtonFontSize
         case metadataFontSize
         case latexEditorFontSize
         case latexEditorFontFamily
@@ -100,6 +108,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         condaPath = try container.decodeIfPresent(String.self, forKey: .condaPath) ?? defaults.condaPath
         environmentName = try container.decodeIfPresent(String.self, forKey: .environmentName) ?? defaults.environmentName
         uniMERNetPath = try container.decodeIfPresent(String.self, forKey: .uniMERNetPath) ?? defaults.uniMERNetPath
+        paddlePaddlePath = try container.decodeIfPresent(String.self, forKey: .paddlePaddlePath) ?? defaults.paddlePaddlePath
         modelVariant = try container.decodeIfPresent(UniMERModelVariant.self, forKey: .modelVariant) ?? defaults.modelVariant
         recognitionMode = try container.decodeIfPresent(RecognitionMode.self, forKey: .recognitionMode) ?? defaults.recognitionMode
         outputFormat = try container.decodeIfPresent(LaTeXOutputFormat.self, forKey: .outputFormat) ?? defaults.outputFormat
@@ -111,6 +120,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         labelFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .labelFontSize) ?? defaults.labelFontSize)
         paneTitleFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .paneTitleFontSize) ?? defaults.paneTitleFontSize)
         toolbarFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .toolbarFontSize) ?? defaults.toolbarFontSize)
+        snipButtonFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .snipButtonFontSize) ?? defaults.snipButtonFontSize)
         metadataFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .metadataFontSize) ?? defaults.metadataFontSize)
         latexEditorFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .latexEditorFontSize) ?? defaults.latexEditorFontSize)
         latexEditorFontFamily = try container.decodeIfPresent(LaTeXEditorFontFamily.self, forKey: .latexEditorFontFamily) ?? defaults.latexEditorFontFamily
@@ -128,6 +138,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         try container.encode(condaPath, forKey: .condaPath)
         try container.encode(environmentName, forKey: .environmentName)
         try container.encode(uniMERNetPath, forKey: .uniMERNetPath)
+        try container.encode(paddlePaddlePath, forKey: .paddlePaddlePath)
         try container.encode(modelVariant, forKey: .modelVariant)
         try container.encode(recognitionMode, forKey: .recognitionMode)
         try container.encode(outputFormat, forKey: .outputFormat)
@@ -139,6 +150,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         try container.encode(Self.clampedFontSize(labelFontSize), forKey: .labelFontSize)
         try container.encode(Self.clampedFontSize(paneTitleFontSize), forKey: .paneTitleFontSize)
         try container.encode(Self.clampedFontSize(toolbarFontSize), forKey: .toolbarFontSize)
+        try container.encode(Self.clampedFontSize(snipButtonFontSize), forKey: .snipButtonFontSize)
         try container.encode(Self.clampedFontSize(metadataFontSize), forKey: .metadataFontSize)
         try container.encode(Self.clampedFontSize(latexEditorFontSize), forKey: .latexEditorFontSize)
         try container.encode(latexEditorFontFamily, forKey: .latexEditorFontFamily)
@@ -152,6 +164,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         condaPath: AppSettingsSnapshot.defaultCondaPath(),
         environmentName: "snaptex",
         uniMERNetPath: AppSettingsSnapshot.defaultUniMERNetPath(),
+        paddlePaddlePath: AppSettingsSnapshot.defaultPaddlePaddlePath(),
         modelVariant: .small,
         recognitionMode: .fast,
         outputFormat: .raw,
@@ -159,12 +172,13 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         autoCopyAfterRecognition: false,
         isHistoryLimitEnabled: true,
         historyLimit: 40,
-        historyTitleFontSize: 13,
-        labelFontSize: 12,
-        paneTitleFontSize: 13,
+        historyTitleFontSize: 12,
+        labelFontSize: 14,
+        paneTitleFontSize: 15,
         toolbarFontSize: 12,
+        snipButtonFontSize: 20,
         metadataFontSize: 11,
-        latexEditorFontSize: 14,
+        latexEditorFontSize: 15,
         latexEditorFontFamily: .monospaced,
         logVerbosity: .normal,
         workerScriptPath: AppSettingsSnapshot.defaultWorkerScriptPath(),
@@ -192,6 +206,25 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
             .appendingPathComponent("Application Support")
             .appendingPathComponent("snaptex")
             .appendingPathComponent("UniMERNet")
+            .path
+    }
+
+    public static func defaultPaddlePaddlePath(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> String {
+        for key in ["SNAPTEX_PADDLEPADDLE_DIR", "PADDLEPADDLE_DIR"] {
+            if let configured = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !configured.isEmpty {
+                return expandTilde(in: configured, homeDirectory: homeDirectory)
+            }
+        }
+
+        return homeDirectory
+            .appendingPathComponent("Library")
+            .appendingPathComponent("Application Support")
+            .appendingPathComponent("snaptex")
+            .appendingPathComponent("PaddlePaddle")
             .path
     }
 

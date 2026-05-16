@@ -5,17 +5,23 @@ public struct OCRWorkerConfiguration: Equatable, Sendable {
     public var environmentName: String
     public var workerScriptPath: String
     public var uniMERNetPath: String
+    public var uniMERNetRuntimePath: String
+    public var paddlePaddlePath: String
 
     public init(
         condaPath: String,
         environmentName: String,
         workerScriptPath: String,
-        uniMERNetPath: String
+        uniMERNetPath: String,
+        uniMERNetRuntimePath: String? = nil,
+        paddlePaddlePath: String
     ) {
         self.condaPath = condaPath
         self.environmentName = environmentName
         self.workerScriptPath = workerScriptPath
         self.uniMERNetPath = uniMERNetPath
+        self.uniMERNetRuntimePath = uniMERNetRuntimePath ?? uniMERNetPath
+        self.paddlePaddlePath = paddlePaddlePath
     }
 
     public func resolvedPythonPath(fileManager: FileManager = .default) throws -> String {
@@ -158,7 +164,7 @@ public final class OCRWorkerClient: @unchecked Sendable {
         process.arguments = [
             configuration.workerScriptPath,
             "--unimernet-path",
-            configuration.uniMERNetPath
+            configuration.uniMERNetRuntimePath
         ]
         var environment = ProcessInfo.processInfo.environment
         environment["PYTHONNOUSERSITE"] = "1"

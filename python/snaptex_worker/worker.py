@@ -319,6 +319,16 @@ class UniMEREngine:
         self.cache = {}
         if not self.unimernet_path.exists():
             raise FileNotFoundError(f"UniMERNet path does not exist: {self.unimernet_path}")
+        if not (self.unimernet_path / "unimernet").is_dir():
+            raise FileNotFoundError(
+                "UniMERNet runtime path is missing the unimernet Python package: "
+                f"{self.unimernet_path}"
+            )
+        if not (self.unimernet_path / "configs" / "val").is_dir():
+            raise FileNotFoundError(
+                "UniMERNet runtime path is missing config templates: "
+                f"{self.unimernet_path / 'configs' / 'val'}"
+            )
 
         sys.path.insert(0, str(self.unimernet_path))
 
@@ -336,13 +346,13 @@ class UniMEREngine:
             # UniMERNet's autocast helper only special-cases CPU. Keep CPU as the conservative default on macOS.
             self.device = torch.device("cpu")
 
-    def predict(self, image_path, model_name, mode, validate_render, log_verbosity="normal"):
+    def predict(self, image_path, model_name, mode, validate_render, log_verbosity="normal", model_storage_path=None):
         worker_log(
             log_verbosity,
             "verbose",
             f"predict start: model={model_name}, ocr_passes={ocr_pass_count(mode)}, validate_render={validate_render}, device={self.device}",
         )
-        model, processor = self._load_model(model_name, log_verbosity)
+        model, processor = self._load_model(model_name, log_verbosity, model_storage_path=model_storage_path)
         source_image = Image.open(image_path)
         raw_image, preprocessing = preprocess_formula_image(source_image)
         worker_log(
@@ -390,13 +400,15 @@ class UniMEREngine:
             "mode": mode,
         }
 
-    def _load_model(self, model_name, log_verbosity="normal"):
-        if model_name in self.cache:
+    def _load_model(self, model_name, log_verbosity="normal", model_storage_path=None):
+        storage_key = str(Path(model_storage_path).expanduser()) if model_storage_path else ""
+        cache_key = (model_name, storage_key)
+        if cache_key in self.cache:
             worker_log(log_verbosity, "verbose", f"model cache hit: {model_name}")
-            return self.cache[model_name]
+            return self.cache[cache_key]
 
         worker_log(log_verbosity, "verbose", f"model load start: {model_name}")
-        config_path = self._config_for(model_name)
+        config_path = self._config_for(model_name, model_storage_path=model_storage_path)
         worker_log(log_verbosity, "debug", f"model config path: {config_path}")
         args = argparse.Namespace(cfg_path=str(config_path), options=None)
 
@@ -419,11 +431,11 @@ class UniMEREngine:
         finally:
             os.chdir(cwd)
 
-        self.cache[model_name] = (model, processor)
+        self.cache[cache_key] = (model, processor)
         worker_log(log_verbosity, "verbose", f"model load complete: {model_name}")
         return model, processor
 
-    def _config_for(self, model_name):
+    def _config_for(self, model_name, model_storage_path=None):
         template = self.unimernet_path / "configs" / "val" / f"unimernet_{model_name}.yaml"
         if not template.exists():
             raise FileNotFoundError(f"Missing UniMERNet config: {template}")
@@ -432,36 +444,52 @@ class UniMEREngine:
             data = yaml.safe_load(handle)
 
         models_dir = self.unimernet_path / "models"
-        model_dir = models_dir / f"unimernet_{model_name}"
+        model_dirs = []
+        if model_storage_path:
+            model_dirs.append(Path(model_storage_path).expanduser())
+        storage_name = UNIMERNET_VARIANT_TO_SIZE.get(model_name)
+        if storage_name:
+            model_dirs.append(models_dir / "unimernet" / storage_name)
+        model_dirs.extend(
+            [
+                models_dir / "unimernet" / model_name,
+                models_dir / f"unimernet_{model_name}",
+            ]
+        )
+        legacy_model_dir = models_dir / f"unimernet_{model_name}"
         root_pth = models_dir / f"unimernet_{model_name}.pth"
-        nested_pth = model_dir / f"unimernet_{model_name}.pth"
-        pytorch_bin = model_dir / "pytorch_model.bin"
-        pytorch_pth = model_dir / "pytorch_model.pth"
-
-        data["model"]["model_config"]["model_name"] = str(model_dir)
-        data["model"]["tokenizer_config"] = {"path": str(model_dir)}
 
         if root_pth.exists():
+            data["model"]["model_config"]["model_name"] = str(legacy_model_dir)
+            data["model"]["tokenizer_config"] = {"path": str(legacy_model_dir)}
             data["model"]["load_pretrained"] = False
             data["model"]["load_finetuned"] = True
             data["model"]["finetuned"] = str(root_pth)
-        elif nested_pth.exists():
-            data["model"]["load_pretrained"] = True
-            data["model"]["load_finetuned"] = False
-            data["model"]["pretrained"] = str(nested_pth)
-        elif pytorch_bin.exists():
-            data["model"]["load_pretrained"] = True
-            data["model"]["load_finetuned"] = False
-            data["model"]["pretrained"] = str(pytorch_bin)
-        elif pytorch_pth.exists():
-            data["model"]["load_pretrained"] = True
-            data["model"]["load_finetuned"] = False
-            data["model"]["pretrained"] = str(pytorch_pth)
         else:
-            raise FileNotFoundError(
-                f"Model files not found for unimernet_{model_name}. "
-                f"Expected {root_pth}, {nested_pth}, {pytorch_bin}, or {pytorch_pth}."
-            )
+            expected = [root_pth]
+            for model_dir in model_dirs:
+                candidates = [
+                    model_dir / f"unimernet_{model_name}.pth",
+                    model_dir / "pytorch_model.bin",
+                    model_dir / "pytorch_model.pth",
+                ]
+                expected.extend(candidates)
+                pretrained = next((candidate for candidate in candidates if candidate.exists()), None)
+                if pretrained is None:
+                    continue
+
+                data["model"]["model_config"]["model_name"] = str(model_dir)
+                data["model"]["tokenizer_config"] = {"path": str(model_dir)}
+                data["model"]["load_pretrained"] = True
+                data["model"]["load_finetuned"] = False
+                data["model"]["pretrained"] = str(pretrained)
+                break
+            else:
+                expected_paths = ", ".join(str(path) for path in expected)
+                raise FileNotFoundError(
+                    f"Model files not found for unimernet_{model_name}. "
+                    f"Expected {expected_paths}."
+                )
 
         temporary = tempfile.NamedTemporaryFile("w", suffix=f"-unimernet-{model_name}.yaml", delete=False)
         with temporary:
@@ -475,12 +503,13 @@ class PaddleFormulaEngine:
 
     def predict(self, image_path, model_selection, mode, validate_render, log_verbosity="normal"):
         model_name = model_selection["model_name"]
+        model_dir = model_selection.get("model_storage_path")
         worker_log(
             log_verbosity,
             "verbose",
             f"predict start: model={model_name}, ocr_passes=1, validate_render={validate_render}, device=paddleocr",
         )
-        model = self._load_model(model_name, log_verbosity)
+        model = self._load_model(model_name, log_verbosity, model_dir=model_dir)
 
         output = model.predict(input=image_path, batch_size=1)
         alternatives = unique(paddle_prediction_strings(output))
@@ -493,12 +522,18 @@ class PaddleFormulaEngine:
             "mode": mode,
         }
 
-    def _load_model(self, model_name, log_verbosity="normal"):
-        if model_name in self.cache:
+    def _load_model(self, model_name, log_verbosity="normal", model_dir=None):
+        cache_key = (model_name, str(model_dir or ""))
+        if cache_key in self.cache:
             worker_log(log_verbosity, "verbose", f"model cache hit: {model_name}")
-            return self.cache[model_name]
+            return self.cache[cache_key]
 
         worker_log(log_verbosity, "verbose", f"model load start: {model_name}")
+        if model_dir:
+            cache_home = paddle_cache_home(model_dir)
+            cache_home.mkdir(parents=True, exist_ok=True)
+            os.environ["PADDLE_PDX_CACHE_HOME"] = str(cache_home)
+
         try:
             from paddleocr import FormulaRecognition
         except ImportError as exc:
@@ -512,11 +547,20 @@ class PaddleFormulaEngine:
                 "You can also rerun scripts/setup_snaptex_env.sh from the SnapTex checkout."
             ) from exc
 
+        kwargs = {"model_name": model_name}
+
         with quiet_model_output():
-            model = FormulaRecognition(model_name=model_name)
-        self.cache[model_name] = model
+            model = FormulaRecognition(**kwargs)
+        self.cache[cache_key] = model
         worker_log(log_verbosity, "verbose", f"model load complete: {model_name}")
         return model
+
+
+def paddle_cache_home(model_dir):
+    model_dir = Path(model_dir).expanduser()
+    if model_dir.parent.name == "official_models":
+        return model_dir.parent.parent
+    return model_dir.parent
 
 
 class OCREngine:
@@ -534,6 +578,7 @@ class OCREngine:
                 mode,
                 validate_render,
                 log_verbosity,
+                model_selection.get("model_storage_path"),
             )
             result["model"] = model_selection["response"]
             return result
@@ -568,6 +613,11 @@ def handle_request(line, engine):
         model = normalize_model_selection(request.get("model"))
     except ValueError as exc:
         return json_response({"ok": False, "error": str(exc)})
+
+    model_storage_value = request.get("model_storage_path")
+    model_storage_path = model_storage_value.strip() if isinstance(model_storage_value, str) else ""
+    if model_storage_path:
+        model["model_storage_path"] = str(Path(model_storage_path).expanduser())
 
     mode = request.get("mode", "balanced")
     validate_render = bool(request.get("validate_render", True))

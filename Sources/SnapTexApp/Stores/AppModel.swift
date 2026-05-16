@@ -203,12 +203,23 @@ final class AppModel: ObservableObject {
         return nil
     }
 
-    func modelState(for variant: UniMERModelVariant) -> ManagedModelState {
-        if !variant.requiresManagedFiles {
-            return .available
+    func isModelDownloadBlocked(for variant: UniMERModelVariant) -> Bool {
+        guard let activeModelDownload,
+              activeModelDownload.variant != variant else {
+            return false
         }
+        return !modelState(for: variant).isInstalled
+    }
+
+    func modelState(for variant: UniMERModelVariant) -> ManagedModelState {
         if let state = modelDownloadStates[variant], state.isDownloading {
             return state
+        }
+        if !variant.requiresManagedFiles {
+            if modelDirectoryIsUsable(modelDirectoryURL(for: variant), for: variant) {
+                return .installed
+            }
+            return modelDownloadStates[variant] ?? .missing
         }
         if installedModels.contains(variant) {
             return .installed
@@ -217,6 +228,7 @@ final class AppModel: ObservableObject {
     }
 
     func refreshModelStatuses(fileManager: FileManager = .default) {
+        migrateLegacyUniMERNetProviderFolders(fileManager: fileManager)
         installedModels = Set(
             UniMERModelVariant.allCases.filter {
                 $0.requiresManagedFiles &&
@@ -236,8 +248,12 @@ final class AppModel: ObservableObject {
     }
 
     func requestModelDownload(_ variant: UniMERModelVariant) {
-        guard variant.requiresManagedFiles,
-              !modelState(for: variant).isDownloading else {
+        let state = modelState(for: variant)
+        guard !state.isInstalled,
+              !state.isDownloading else {
+            return
+        }
+        guard activeModelDownload == nil else {
             return
         }
         pendingModelDownload = PendingModelDownload(variant: variant)
@@ -278,7 +294,7 @@ final class AppModel: ObservableObject {
     }
 
     func canRevealModelFiles(_ variant: UniMERModelVariant) -> Bool {
-        modelRevealURL(for: variant) != nil
+        return modelRevealURL(for: variant) != nil
     }
 
     func revealModelFilesInFinder(_ variant: UniMERModelVariant) {
@@ -533,6 +549,28 @@ final class AppModel: ObservableObject {
             insertionIndex = adjustedTargetIndex + 1
         }
         historyFolders.insert(movedFolder, at: insertionIndex)
+        status = "Moved folder"
+    }
+
+    func moveHistoryFolderUp(_ folderID: HistoryFolder.ID) {
+        guard let index = historyFolders.firstIndex(where: { $0.id == folderID }),
+              index > 0 else {
+            return
+        }
+
+        let movedFolder = historyFolders.remove(at: index)
+        historyFolders.insert(movedFolder, at: index - 1)
+        status = "Moved folder"
+    }
+
+    func moveHistoryFolderDown(_ folderID: HistoryFolder.ID) {
+        guard let index = historyFolders.firstIndex(where: { $0.id == folderID }),
+              index < historyFolders.count - 1 else {
+            return
+        }
+
+        let movedFolder = historyFolders.remove(at: index)
+        historyFolders.insert(movedFolder, at: index + 1)
         status = "Moved folder"
     }
 
@@ -917,8 +955,12 @@ final class AppModel: ObservableObject {
     }
 
     private func startModelDownload(_ variant: UniMERModelVariant, selectWhenComplete: Bool) {
-        guard variant.requiresManagedFiles,
-              !modelState(for: variant).isDownloading else {
+        let state = modelState(for: variant)
+        guard !state.isInstalled,
+              !state.isDownloading else {
+            return
+        }
+        guard activeModelDownload == nil else {
             return
         }
 
@@ -956,25 +998,46 @@ final class AppModel: ObservableObject {
         modelDownloadStates = states
     }
 
+    private func migrateLegacyUniMERNetProviderFolders(fileManager: FileManager = .default) {
+        for variant in UniMERModelVariant.allCases where variant.provider == .uniMERNet {
+            let canonicalDirectory = variant.modelDirectory(in: settings.uniMERNetPath)
+            let legacyProviderDirectory = URL(fileURLWithPath: (settings.uniMERNetPath as NSString).expandingTildeInPath)
+                .appendingPathComponent("models")
+                .appendingPathComponent(variant.provider.rawValue)
+                .appendingPathComponent(variant.workerModelName)
+
+            guard canonicalDirectory != legacyProviderDirectory,
+                  fileManager.fileExists(atPath: legacyProviderDirectory.path),
+                  !fileManager.fileExists(atPath: canonicalDirectory.path) else {
+                continue
+            }
+
+            try? fileManager.createDirectory(
+                at: canonicalDirectory.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try? fileManager.moveItem(at: legacyProviderDirectory, to: canonicalDirectory)
+        }
+    }
+
     private func deleteModel(_ variant: UniMERModelVariant) {
         let fileManager = FileManager.default
 
         if variant.requiresManagedFiles {
-            let modelDirectory = modelDirectoryURL(for: variant)
-
             for candidate in variant.modelFileCandidates(in: settings.uniMERNetPath) {
                 if fileManager.fileExists(atPath: candidate.path) {
                     try? fileManager.removeItem(at: candidate)
                 }
             }
-            if fileManager.fileExists(atPath: modelDirectory.path) {
-                try? fileManager.removeItem(at: modelDirectory)
+            for modelDirectory in variant.modelDirectories(in: settings.uniMERNetPath) {
+                if fileManager.fileExists(atPath: modelDirectory.path) {
+                    try? fileManager.removeItem(at: modelDirectory)
+                }
             }
         } else {
-            for candidate in paddleModelCacheCandidates(for: variant) {
-                if fileManager.fileExists(atPath: candidate.path) {
-                    try? fileManager.removeItem(at: candidate)
-                }
+            let modelDirectory = modelDirectoryURL(for: variant)
+            if fileManager.fileExists(atPath: modelDirectory.path) {
+                try? fileManager.removeItem(at: modelDirectory)
             }
         }
 
@@ -1068,6 +1131,7 @@ final class AppModel: ObservableObject {
                 imagePath: imageURL.path,
                 mode: settings.recognitionMode,
                 model: settings.modelVariant,
+                modelStoragePath: modelDirectoryURL(for: settings.modelVariant).path,
                 validateRender: true,
                 logVerbosity: settings.logVerbosity
             )
@@ -1130,8 +1194,67 @@ final class AppModel: ObservableObject {
             condaPath: settings.condaPath,
             environmentName: settings.environmentName,
             workerScriptPath: settings.workerScriptPath,
-            uniMERNetPath: settings.uniMERNetPath
+            uniMERNetPath: settings.uniMERNetPath,
+            uniMERNetRuntimePath: uniMERNetRuntimePath(for: settings),
+            paddlePaddlePath: settings.paddlePaddlePath
         )
+    }
+
+    static func uniMERNetRuntimePath(
+        for settings: AppSettingsSnapshot,
+        fileManager: FileManager = .default,
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        resourceDirectory: URL? = Bundle.main.resourceURL,
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser
+    ) -> String {
+        let modelRoot = expandedFileURL(settings.uniMERNetPath, homeDirectory: homeDirectory)
+        let workerURL = expandedFileURL(settings.workerScriptPath, homeDirectory: homeDirectory)
+        let workerRoot = workerURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+
+        var candidates: [URL] = []
+        for key in ["SNAPTEX_UNIMERNET_RUNTIME_DIR", "UNIMERNET_RUNTIME_DIR"] {
+            if let path = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !path.isEmpty {
+                candidates.append(expandedFileURL(path, homeDirectory: homeDirectory))
+            }
+        }
+        candidates.append(modelRoot.appendingPathComponent("runtime"))
+        candidates.append(modelRoot)
+        if let resourceDirectory {
+            candidates.append(resourceDirectory.appendingPathComponent("UniMERNet"))
+        }
+        candidates.append(workerRoot.appendingPathComponent("UniMERNet"))
+        candidates.append(workerRoot.deletingLastPathComponent().appendingPathComponent("UniMERNet"))
+        candidates.append(
+            homeDirectory
+                .appendingPathComponent("Library")
+                .appendingPathComponent("Application Support")
+                .appendingPathComponent("snaptex")
+                .appendingPathComponent("UniMERNet")
+                .appendingPathComponent("runtime")
+        )
+        candidates.append(
+            homeDirectory
+                .appendingPathComponent("workLund")
+                .appendingPathComponent("vibe-coding")
+                .appendingPathComponent("UniMERNet")
+        )
+        candidates.append(
+            homeDirectory
+                .appendingPathComponent("Developer")
+                .appendingPathComponent("UniMERNet")
+        )
+        candidates.append(homeDirectory.appendingPathComponent("UniMERNet"))
+
+        if let runtime = candidates.first(where: {
+            uniMERNetRuntimeIsUsable($0, fileManager: fileManager)
+        }) {
+            return runtime.path
+        }
+        return modelRoot.path
     }
 
     private func appendLog(_ message: String, minimumVerbosity: LogVerbosity = .normal) {
@@ -1392,32 +1515,103 @@ final class AppModel: ObservableObject {
     }
 
     private func modelDirectoryURL(for variant: UniMERModelVariant) -> URL {
-        URL(fileURLWithPath: (settings.uniMERNetPath as NSString).expandingTildeInPath)
-            .appendingPathComponent("models")
-            .appendingPathComponent(variant.directoryName)
+        variant.modelDirectory(in: modelStorageRootPath(for: variant))
     }
 
-    private func paddleModelCacheCandidates(for variant: UniMERModelVariant) -> [URL] {
-        let home = FileManager.default.homeDirectoryForCurrentUser
-        let modelName = variant.workerModelName
-        return [
-            home.appendingPathComponent(".paddlex/official_models").appendingPathComponent(modelName),
-            home.appendingPathComponent(".paddleocr/whl/formula").appendingPathComponent(modelName),
-            home.appendingPathComponent(".cache/paddleocr").appendingPathComponent(modelName)
-        ]
+    private func modelStorageRootPath(for variant: UniMERModelVariant) -> String {
+        switch variant.provider {
+        case .uniMERNet:
+            return settings.uniMERNetPath
+        case .paddlePaddle:
+            return settings.paddlePaddlePath
+        }
     }
 
     private func modelRevealURL(for variant: UniMERModelVariant) -> URL? {
         let fileManager = FileManager.default
         let modelDirectory = modelDirectoryURL(for: variant)
         var isDirectory: ObjCBool = false
-        if fileManager.fileExists(atPath: modelDirectory.path, isDirectory: &isDirectory), isDirectory.boolValue {
+        if fileManager.fileExists(atPath: modelDirectory.path, isDirectory: &isDirectory),
+           isDirectory.boolValue,
+           modelDirectoryIsUsable(modelDirectory, for: variant) {
             return modelDirectory
+        }
+
+        guard variant.requiresManagedFiles else {
+            return nil
         }
 
         return variant.modelFileCandidates(in: settings.uniMERNetPath).first {
             fileManager.fileExists(atPath: $0.path)
         }
+    }
+
+    private func modelDirectoryIsUsable(_ url: URL, for variant: UniMERModelVariant) -> Bool {
+        switch variant.provider {
+        case .uniMERNet:
+            return modelDirectoryContainsFiles(url)
+        case .paddlePaddle:
+            return FileManager.default.fileExists(
+                atPath: url.appendingPathComponent("inference.yml").path
+            )
+        }
+    }
+
+    private func modelDirectoryContainsFiles(_ url: URL) -> Bool {
+        guard let enumerator = FileManager.default.enumerator(
+            at: url,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else {
+            return false
+        }
+
+        for case let fileURL as URL in enumerator {
+            let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey])
+            if values?.isRegularFile == true {
+                return true
+            }
+        }
+        return false
+    }
+
+    private static func expandedFileURL(_ path: String, homeDirectory: URL) -> URL {
+        let expandedPath: String
+        if path == "~" {
+            expandedPath = homeDirectory.path
+        } else if path.hasPrefix("~/") {
+            expandedPath = homeDirectory
+                .appendingPathComponent(String(path.dropFirst(2)))
+                .path
+        } else {
+            expandedPath = path
+        }
+        return URL(fileURLWithPath: expandedPath)
+    }
+
+    private static func uniMERNetRuntimeIsUsable(
+        _ url: URL,
+        fileManager: FileManager
+    ) -> Bool {
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(
+            atPath: url.appendingPathComponent("unimernet").path,
+            isDirectory: &isDirectory
+        ),
+              isDirectory.boolValue else {
+            return false
+        }
+        guard fileManager.fileExists(
+            atPath: url
+                .appendingPathComponent("configs")
+                .appendingPathComponent("val")
+                .path,
+            isDirectory: &isDirectory
+        ),
+              isDirectory.boolValue else {
+            return false
+        }
+        return true
     }
 
     private func imageFileExists(at url: URL?) -> Bool {

@@ -29,7 +29,7 @@ struct OutputPane: View {
                 .frame(maxWidth: .infinity, minHeight: 160)
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("OCR Alternatives")
+                Text("Alternatives")
                     .font(paneTitleFont)
 
                 if model.alternatives.isEmpty {

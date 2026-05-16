@@ -34,6 +34,7 @@ Optional environment variables:
 
 - `SNAPTEX_ENV_NAME`: conda environment name
 - `SNAPTEX_UNIMERNET_DIR`: custom UniMERNet model directory
+- `SNAPTEX_UNIMERNET_RUNTIME_DIR`: custom UniMERNet runtime checkout directory
 - `SNAPTEX_MODEL_SIZE`: `s`, `m`, or `l`
 
 The legacy `SNAPTEX_MODEL_VARIANT` values `tiny`, `small`, and `base` still work.

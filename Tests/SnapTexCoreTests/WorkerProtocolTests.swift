@@ -16,6 +16,7 @@ final class WorkerProtocolTests: XCTestCase {
             imagePath: "/tmp/formula.png",
             mode: .accurate,
             model: OCRModelSelection(provider: .uniMERNet, size: .medium),
+            modelStoragePath: "/tmp/SnapTex/models/unimernet/m",
             validateRender: true,
             logVerbosity: .debug
         )
@@ -28,6 +29,7 @@ final class WorkerProtocolTests: XCTestCase {
         XCTAssertEqual("accurate", json["mode"] as? String)
         XCTAssertEqual("unimernet", model["provider"] as? String)
         XCTAssertEqual("m", model["size"] as? String)
+        XCTAssertEqual("/tmp/SnapTex/models/unimernet/m", json["model_storage_path"] as? String)
         XCTAssertEqual(true, json["validate_render"] as? Bool)
         XCTAssertEqual("debug", json["log_verbosity"] as? String)
     }
