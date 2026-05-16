@@ -100,19 +100,6 @@ final class HistoryFolderTests: XCTestCase {
         XCTAssertEqual([entry.id], model.visibleHistory.map(\.id))
     }
 
-    func testMovingDraggedHistoryIDsToFolderIgnoresUnknownIDs() {
-        let model = AppModel()
-        let folder = model.createHistoryFolder(named: "Geometry")
-        let movedEntry = makeEntry(title: "Curvature")
-        let untouchedEntry = makeEntry(title: "Integral")
-        model.history = [movedEntry, untouchedEntry]
-
-        model.moveHistoryEntries(withIDs: [movedEntry.id, UUID()], to: folder.id)
-
-        XCTAssertEqual(folder.id, model.history.first { $0.id == movedEntry.id }?.folderID)
-        XCTAssertNil(model.history.first { $0.id == untouchedEntry.id }?.folderID)
-    }
-
     func testDeletingFolderKeepsSnapsAsUnfiled() {
         let model = AppModel()
         let folder = model.createHistoryFolder(named: "Geometry")

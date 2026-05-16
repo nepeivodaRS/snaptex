@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import UniformTypeIdentifiers
 
 private let historySidebarHorizontalPadding: CGFloat = 12
 
@@ -58,9 +57,6 @@ struct HistorySidebarView: View {
                                 reopen: { model.reopenHistoryEntry(entry) }
                             )
                             .id(entry.id)
-                            .onDrag {
-                                return NSItemProvider(object: HistoryDragPayload.entry(entry.id) as NSString)
-                            }
                             .listRowInsets(EdgeInsets(
                                 top: 5,
                                 leading: historySidebarHorizontalPadding,
@@ -292,7 +288,6 @@ private struct HistoryScopePicker: View {
                             renamingFolderID: $renamingFolderID,
                             moveUp: { model.moveHistoryFolderUp(folder.id) },
                             moveDown: { model.moveHistoryFolderDown(folder.id) },
-                            moveDroppedEntries: { model.moveHistoryEntries(withIDs: $0, to: folder.id) },
                             deleteKeepingSnaps: { model.deleteHistoryFolderKeepingSnaps(folder) },
                             deleteWithSnaps: { model.deleteHistoryFolderAndSnaps(folder) }
                         )
@@ -410,13 +405,11 @@ private struct HistoryFolderScopeRow: View {
     @Binding var renamingFolderID: HistoryFolder.ID?
     let moveUp: () -> Void
     let moveDown: () -> Void
-    let moveDroppedEntries: ([OCRHistoryEntry.ID]) -> Void
     let deleteKeepingSnaps: () -> Void
     let deleteWithSnaps: () -> Void
 
     @State private var isRenaming = false
     @State private var draftName = ""
-    @State private var isSnapDropTarget = false
     @FocusState private var nameFieldFocused: Bool
 
     var body: some View {
@@ -426,10 +419,6 @@ private struct HistoryFolderScopeRow: View {
             } else {
                 folderRow
                     .simultaneousGesture(TapGesture(count: 2).onEnded { beginRename() })
-                    .onDrop(of: [UTType.text], isTargeted: $isSnapDropTarget) { providers in
-                        providers.loadHistoryEntryIDs(moveDroppedEntries)
-                        return true
-                    }
                     .overlay {
                         FolderContextMenuBridge(
                             selectedColor: folder.color,
@@ -492,11 +481,11 @@ private struct HistoryFolderScopeRow: View {
         .onTapGesture(perform: select)
         .background {
             RoundedRectangle(cornerRadius: 6)
-                .fill((showsSelectionBackground || isSnapDropTarget) ? AppTheme.selectedBackground : Color.clear)
+                .fill(showsSelectionBackground ? AppTheme.selectedBackground : Color.clear)
         }
         .overlay {
             RoundedRectangle(cornerRadius: 6)
-                .strokeBorder((showsSelectionBackground || isSnapDropTarget) ? AppTheme.selectedBorder : Color.clear, lineWidth: 1)
+                .strokeBorder(showsSelectionBackground ? AppTheme.selectedBorder : Color.clear, lineWidth: 1)
         }
     }
 
@@ -693,7 +682,7 @@ private struct HistoryRow: View {
             Button(action: reopen) {
                 thumbnail
             }
-            .buttonStyle(.plain)
+            .buttonStyle(HistoryThumbnailButtonStyle())
             .help("Reopen and edit")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -810,7 +799,7 @@ private struct HistoryRow: View {
             RoundedRectangle(cornerRadius: 5)
                 .fill(AppTheme.historySnipBackground)
 
-            if let image = entry.image {
+            if let image = entry.displayImage {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
@@ -836,6 +825,12 @@ private struct HistoryRow: View {
         withAnimation(.easeInOut(duration: isActive ? 0.28 : 1.15)) {
             hoverEffectProgress = isActive ? 1 : 0
         }
+    }
+}
+
+private struct HistoryThumbnailButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
     }
 }
 
@@ -1572,62 +1567,5 @@ private extension HistoryFolderColor {
         case .purple:
             return .systemPurple
         }
-    }
-}
-
-private enum HistoryDragPayload {
-    private static let entryPrefix = "snaptex-entry:"
-
-    static func entry(_ id: OCRHistoryEntry.ID) -> String {
-        "\(entryPrefix)\(id.uuidString)"
-    }
-
-    static func entryID(from string: String) -> OCRHistoryEntry.ID? {
-        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix(entryPrefix) {
-            return OCRHistoryEntry.ID(uuidString: String(trimmed.dropFirst(entryPrefix.count)))
-        }
-        return OCRHistoryEntry.ID(uuidString: trimmed)
-    }
-}
-
-private extension Array where Element == NSItemProvider {
-    func loadHistoryEntryIDs(_ completion: @escaping ([OCRHistoryEntry.ID]) -> Void) {
-        let group = DispatchGroup()
-        var ids: [OCRHistoryEntry.ID] = []
-        let lock = NSLock()
-
-        for provider in self where provider.hasItemConformingToTypeIdentifier(UTType.text.identifier) {
-            group.enter()
-            provider.loadItem(forTypeIdentifier: UTType.text.identifier, options: nil) { item, _ in
-                defer { group.leave() }
-
-                guard let string = historyDragString(from: item),
-                      let id = HistoryDragPayload.entryID(from: string) else {
-                    return
-                }
-
-                lock.lock()
-                ids.append(id)
-                lock.unlock()
-            }
-        }
-
-        group.notify(queue: .main) {
-            completion(ids)
-        }
-    }
-
-    private func historyDragString(from item: NSSecureCoding?) -> String? {
-        if let string = item as? String {
-            return string
-        }
-        if let string = item as? NSString {
-            return string as String
-        }
-        if let data = item as? Data {
-            return String(data: data, encoding: .utf8)
-        }
-        return nil
     }
 }

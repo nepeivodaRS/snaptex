@@ -357,14 +357,19 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyView.contains(".background(AppTheme.windowBackground)"))
     }
 
-    func testHistorySidebarUsesFolderTerminologyAndDragDrop() throws {
+    func testHistorySidebarUsesFolderTerminologyAndSubmenuAssignmentOnly() throws {
         let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
 
         XCTAssertTrue(historyView.contains("Folders"))
-        XCTAssertTrue(historyView.contains("onDrag"))
-        XCTAssertTrue(historyView.contains("onDrop"))
+        XCTAssertTrue(historyView.contains("HistoryFolderAssignmentMenu"))
         XCTAssertTrue(historyView.contains("Change Folder Color"))
         XCTAssertTrue(historyView.contains("Remove Folder with Snaps"))
+        XCTAssertFalse(historyView.contains(".onDrag"))
+        XCTAssertFalse(historyView.contains(".onDrop"))
+        XCTAssertFalse(historyView.contains("HistoryDragPayload"))
+        XCTAssertFalse(historyView.contains("loadHistoryEntryIDs"))
+        XCTAssertFalse(historyView.contains("isSnapDropTarget"))
+        XCTAssertFalse(historyView.contains("moveDroppedEntries"))
         XCTAssertFalse(historyView.contains("Projects"))
         XCTAssertFalse(historyView.contains("Project name"))
         XCTAssertFalse(historyView.contains("New Project"))
@@ -465,6 +470,33 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertFalse(historyView.contains("Color.white.opacity(0.012)"))
         XCTAssertFalse(historyView.contains("Color.white.opacity(0.045)"))
         XCTAssertFalse(historyView.contains("Color.white.opacity(0.018)"))
+    }
+
+    func testHistoryThumbnailClickDoesNotDimImage() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        let historyRow = try viewSource(named: "HistoryRow", in: historyView)
+        guard let styleStart = historyView.range(of: "private struct HistoryThumbnailButtonStyle: ButtonStyle")?.lowerBound else {
+            XCTFail("History thumbnail should use a custom press-neutral button style")
+            return
+        }
+        let styleRemainder = historyView[styleStart...]
+        let styleEnd = styleRemainder.range(
+            of: "\nprivate struct ",
+            range: styleRemainder.index(after: styleStart)..<styleRemainder.endIndex
+        )?.lowerBound ?? styleRemainder.endIndex
+        let thumbnailButtonStyle = styleRemainder[..<styleEnd]
+
+        XCTAssertTrue(historyRow.contains(".buttonStyle(HistoryThumbnailButtonStyle())"))
+        XCTAssertTrue(thumbnailButtonStyle.contains("configuration.label"))
+        XCTAssertFalse(thumbnailButtonStyle.contains("configuration.isPressed"))
+    }
+
+    func testHistoryThumbnailUsesPersistedImageFallback() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        let historyRow = try viewSource(named: "HistoryRow", in: historyView)
+
+        XCTAssertTrue(historyRow.contains("entry.displayImage"))
+        XCTAssertFalse(historyRow.contains("if let image = entry.image {"))
     }
 
     func testFoldersCanBeCollapsedFromFoldersHeader() throws {

@@ -693,23 +693,6 @@ final class AppModel: ObservableObject {
         status = "Moved to \(historyFolderName(for: folderID))"
     }
 
-    func moveHistoryEntries(withIDs ids: [OCRHistoryEntry.ID], to folderID: HistoryFolder.ID) {
-        guard historyFolders.contains(where: { $0.id == folderID }) else {
-            return
-        }
-
-        let idSet = Set(ids)
-        history = history.map { entry in
-            idSet.contains(entry.id) ? entry.assigned(to: folderID) : entry
-        }
-        if let selectedHistoryID,
-           let selectedEntry = history.first(where: { $0.id == selectedHistoryID }),
-           !isHistoryEntryVisible(selectedEntry) {
-            reconcileSelectedHistoryWithCurrentScope()
-        }
-        status = "Moved to \(historyFolderName(for: folderID))"
-    }
-
     func historyCount(for scope: HistoryScope) -> Int {
         switch scope {
         case .all:

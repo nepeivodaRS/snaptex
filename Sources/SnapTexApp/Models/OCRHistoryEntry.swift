@@ -69,6 +69,10 @@ struct OCRHistoryEntry: Identifiable, Equatable {
         return formatter.string(from: timestamp)
     }
 
+    var displayImage: NSImage? {
+        image ?? imageURL.flatMap(NSImage.init(contentsOf:))
+    }
+
     func renamed(to title: String) -> OCRHistoryEntry {
         OCRHistoryEntry(
             id: id,
