@@ -101,6 +101,10 @@ final class AppModel: ObservableObject {
         !isSnipping
     }
 
+    var canAddFromFinder: Bool {
+        !isSnipping
+    }
+
     var canCopy: Bool {
         !latexOutput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
@@ -329,6 +333,32 @@ final class AppModel: ObservableObject {
         }
         Task {
             await importImage(image)
+        }
+    }
+
+    func addImageFromFinder() {
+        guard canAddFromFinder else {
+            return
+        }
+        guard ensureSelectedModelAvailable() else {
+            return
+        }
+
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.image]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.message = "Choose an image to recognize"
+        panel.prompt = "Add"
+
+        guard panel.runModal() == .OK,
+              let url = panel.url else {
+            return
+        }
+
+        Task {
+            await importImageFile(url)
         }
     }
 
@@ -1440,6 +1470,7 @@ final class AppModel: ObservableObject {
     private func updateEditorMetadata() {
         let body = LaTeXSource.mathBody(from: latexOutput)
         currentBodyLatex = body
+        validationIssue = body.isEmpty ? nil : LaTeXValidator.firstIssue(in: body)
     }
 
     private func syncSelectedHistoryOutput() {

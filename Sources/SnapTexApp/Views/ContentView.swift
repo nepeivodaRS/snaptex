@@ -97,6 +97,7 @@ private struct ToolbarActionStrip: View {
     var body: some View {
         HStack(spacing: 8) {
             SnipButton(model: model)
+            AddImageButton(model: model)
         }
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -348,8 +349,25 @@ private struct SnipButton: View {
                 .font(.system(size: CGFloat(model.settings.snipButtonFontSize), weight: .semibold))
                 .frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)
         }
-        .buttonStyle(GraphitePrimaryButtonStyle())
+        .buttonStyle(LiquidSnipButtonStyle())
         .disabled(!model.canStartSnip)
         .help("Capture a screen region")
+    }
+}
+
+private struct AddImageButton: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        Button {
+            model.addImageFromFinder()
+        } label: {
+            Label("Add", systemImage: "plus")
+                .font(.system(size: CGFloat(model.settings.snipButtonFontSize), weight: .semibold))
+                .frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)
+        }
+        .buttonStyle(LiquidSnipButtonStyle())
+        .disabled(!model.canAddFromFinder)
+        .help("Add an image from Finder")
     }
 }

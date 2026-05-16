@@ -19,9 +19,19 @@ enum AppTheme {
     static let primaryButtonBackground = Color(red: 0.920, green: 0.930, blue: 0.945)
     static let primaryForeground = Color(red: 0.067, green: 0.075, blue: 0.090)
     static let quietText = Color.white.opacity(0.58)
+    static let snipAccent = Color(red: 0.650, green: 0.830, blue: 1.000)
+    static let historySnipBackground = Color.white.opacity(0.035)
+    static let historySnipHoverBackground = Color.white.opacity(0.055)
+    static let historySelectedBackground = Color.white.opacity(0.110)
 
     static let panelCornerRadius: CGFloat = 8
     static let controlCornerRadius: CGFloat = 7
+}
+
+struct LiquidSnipButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        LiquidSnipButtonBody(configuration: configuration)
+    }
 }
 
 struct GraphitePanelModifier: ViewModifier {
@@ -74,6 +84,188 @@ struct GraphiteTextInputModifier: ViewModifier {
 private enum GraphiteButtonKind {
     case primary
     case secondary
+}
+
+private struct LiquidSnipButtonBody: View {
+    let configuration: ButtonStyle.Configuration
+
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var isHovered = false
+    @State private var mouseLocation = CGPoint(x: 48, y: 16)
+
+    var body: some View {
+        configuration.label
+            .fontWeight(.semibold)
+            .foregroundStyle(foreground)
+            .padding(.horizontal, 13)
+            .padding(.vertical, 7)
+            .background {
+                GeometryReader { proxy in
+                    ZStack {
+                        RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius)
+                            .fill(AppTheme.controlBackground.opacity(backgroundOpacity))
+
+                        if isHovered && isEnabled {
+                            RadialGradient(
+                                colors: [
+                                    AppTheme.snipAccent.opacity(configuration.isPressed ? 0.28 : 0.22),
+                                    AppTheme.snipAccent.opacity(0.07),
+                                    Color.clear
+                                ],
+                                center: glowCenter(in: proxy.size),
+                                startRadius: 0,
+                                endRadius: max(proxy.size.width, proxy.size.height) * 1.18
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius))
+                        }
+                    }
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius)
+                    .strokeBorder(border, lineWidth: 1)
+            }
+            .shadow(
+                color: AppTheme.snipAccent.opacity(isHovered && isEnabled ? 0.16 : 0),
+                radius: isHovered && isEnabled ? 10 : 0,
+                y: isHovered && isEnabled ? 2 : 0
+            )
+            .scaleEffect(configuration.isPressed ? 0.97 : isHovered && isEnabled ? 1.025 : 1)
+            .offset(y: isHovered && isEnabled && !configuration.isPressed ? -1 : 0)
+            .contentShape(RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius))
+            .overlay {
+                LiquidSnipTrackingArea(
+                    mouseLocation: $mouseLocation,
+                    isHovered: $isHovered,
+                    isEnabled: isEnabled
+                )
+            }
+            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.14), value: isHovered)
+    }
+
+    private var foreground: Color {
+        if !isEnabled {
+            return .primary.opacity(0.34)
+        }
+        if configuration.isPressed || isHovered {
+            return .primary
+        }
+        return .primary.opacity(0.86)
+    }
+
+    private var backgroundOpacity: Double {
+        guard isEnabled else {
+            return 0.32
+        }
+        if configuration.isPressed {
+            return 0.82
+        }
+        return isHovered ? 0.76 : 0.58
+    }
+
+    private var border: Color {
+        guard isEnabled else {
+            return AppTheme.border
+        }
+        if configuration.isPressed {
+            return AppTheme.snipAccent.opacity(0.48)
+        }
+        return isHovered ? AppTheme.snipAccent.opacity(0.34) : Color.white.opacity(0.12)
+    }
+
+    private func glowCenter(in size: CGSize) -> UnitPoint {
+        guard size.width > 0, size.height > 0 else {
+            return .center
+        }
+        return UnitPoint(
+            x: min(max(mouseLocation.x / size.width, 0), 1),
+            y: min(max(1 - mouseLocation.y / size.height, 0), 1)
+        )
+    }
+}
+
+private struct LiquidSnipTrackingArea: NSViewRepresentable {
+    @Binding var mouseLocation: CGPoint
+    @Binding var isHovered: Bool
+    let isEnabled: Bool
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.mouseLocation = $mouseLocation
+        view.isHovered = $isHovered
+        view.isEnabled = isEnabled
+        return view
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.mouseLocation = $mouseLocation
+        view.isHovered = $isHovered
+        view.isEnabled = isEnabled
+        view.updateCursor()
+    }
+
+    final class TrackingView: NSView {
+        var mouseLocation: Binding<CGPoint>?
+        var isHovered: Binding<Bool>?
+        var isEnabled = true
+        private var isInside = false
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            for trackingArea in trackingAreas {
+                removeTrackingArea(trackingArea)
+            }
+            addTrackingArea(
+                NSTrackingArea(
+                    rect: .zero,
+                    options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved, .cursorUpdate],
+                    owner: self
+                )
+            )
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            isInside = true
+            isHovered?.wrappedValue = true
+            updateLocation(from: event)
+            updateCursor()
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            updateLocation(from: event)
+            updateCursor()
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            isInside = false
+            isHovered?.wrappedValue = false
+            NSCursor.arrow.set()
+        }
+
+        override func cursorUpdate(with event: NSEvent) {
+            updateCursor()
+        }
+
+        func updateCursor() {
+            guard isInside else {
+                return
+            }
+            if isEnabled {
+                NSCursor.pointingHand.set()
+            } else {
+                NSCursor.arrow.set()
+            }
+        }
+
+        private func updateLocation(from event: NSEvent) {
+            mouseLocation?.wrappedValue = convert(event.locationInWindow, from: nil)
+        }
+    }
 }
 
 private struct GraphiteButtonBody: View {

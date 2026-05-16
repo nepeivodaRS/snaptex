@@ -8,7 +8,9 @@ final class AppLayoutMetricsTests: XCTestCase {
             + AppLayoutMetrics.capturePaneMinWidth
             + AppLayoutMetrics.outputPaneMinWidth
             + 32
-        let fullToolbarMinimumWidth = AppLayoutMetrics.toolbarPrimaryActionMinWidth + 24
+        let fullToolbarMinimumWidth = AppLayoutMetrics.toolbarPrimaryActionMinWidth
+            + 8 + AppLayoutMetrics.toolbarPrimaryActionMinWidth
+            + 24
             + 1
             + AppLayoutMetrics.toolbarModelLabelWidth + 6 + 190
             + 32 + 6 + 104
@@ -36,7 +38,7 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarModelLabelWidth, 44)
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarPassesLabelWidth, 54)
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarPrimaryActionMinWidth, 92)
-        XCTAssertTrue(metricsSource?.contains("captureHeaderActionButtonMinWidth: CGFloat = 82") == true)
+        XCTAssertFalse(metricsSource?.contains("toolbarSecondaryActionMinWidth") == true)
     }
 
     func testToolbarHasResponsiveFullAndCompactLayouts() throws {
@@ -51,12 +53,10 @@ final class AppLayoutMetricsTests: XCTestCase {
 
     func testToolbarControlsUseStableMinimumWidths() throws {
         let toolbarSource = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
-        let captureSource = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
 
         XCTAssertTrue(toolbarSource.contains(".frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)"))
-        XCTAssertTrue(captureSource.contains(".frame(minWidth: AppLayoutMetrics.captureHeaderActionButtonMinWidth)"))
+        XCTAssertFalse(toolbarSource.contains("AppLayoutMetrics.toolbarSecondaryActionMinWidth"))
         XCTAssertTrue(toolbarSource.contains(".fixedSize(horizontal: true, vertical: false)"))
-        XCTAssertTrue(captureSource.contains(".fixedSize(horizontal: true, vertical: false)"))
     }
 
     func testToolbarDownloadStatusUsesModelNameWithoutRedundantModelSuffix() throws {
@@ -76,11 +76,18 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertFalse(source.contains("Label(\"Paste\", systemImage: \"doc.on.clipboard\")"))
     }
 
-    func testToolbarOnlyExposesSnipAction() throws {
+    func testToolbarExposesSnipAndFinderAddActions() throws {
         let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
+        let modelSource = try sourceFile("Sources/SnapTexApp/Stores/AppModel.swift")
 
         XCTAssertTrue(source.contains("SnipButton(model: model)"))
+        XCTAssertTrue(source.contains("AddImageButton(model: model)"))
         XCTAssertTrue(source.contains("Label(\"Snip\", systemImage: \"crop\")"))
+        XCTAssertTrue(source.contains("Label(\"Add\", systemImage: \"plus\")"))
+        XCTAssertTrue(source.contains("model.addImageFromFinder()"))
+        XCTAssertTrue(modelSource.contains("func addImageFromFinder()"))
+        XCTAssertTrue(modelSource.contains("NSOpenPanel()"))
+        XCTAssertTrue(modelSource.contains("panel.allowedContentTypes = [.image]"))
         XCTAssertFalse(source.contains("model.pasteImageFromClipboard()"))
         XCTAssertFalse(source.contains("model.retry()"))
         XCTAssertFalse(source.contains("model.copyLatex()"))
@@ -89,17 +96,17 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertFalse(source.contains("Label(\"Copy\", systemImage: \"doc.on.doc\")"))
     }
 
-    func testCaptureHeaderExposesRetryAndAddActionsNextToTitle() throws {
+    func testCaptureHeaderDoesNotExposeRetryOrAddActionsNextToTitle() throws {
         let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
 
         XCTAssertTrue(source.contains("private var captureHeader: some View"))
-        XCTAssertTrue(source.contains("CaptureHeaderActions(model: model)"))
         XCTAssertTrue(source.contains("Text(\"Capture\")"))
         XCTAssertTrue(source.contains("Spacer()"))
-        XCTAssertTrue(source.contains("model.retry()"))
-        XCTAssertTrue(source.contains("model.pasteImageFromClipboard()"))
-        XCTAssertTrue(source.contains("Label(\"Retry\", systemImage: \"arrow.clockwise\")"))
-        XCTAssertTrue(source.contains("Label(\"Add\", systemImage: \"plus\")"))
+        XCTAssertFalse(source.contains("CaptureHeaderActions(model: model)"))
+        XCTAssertFalse(source.contains("private struct CaptureHeaderActions"))
+        XCTAssertFalse(source.contains("model.pasteImageFromClipboard()"))
+        XCTAssertFalse(source.contains("Label(\"Retry\", systemImage: \"arrow.clockwise\")"))
+        XCTAssertFalse(source.contains("Label(\"Add\", systemImage: \"plus\")"))
         XCTAssertFalse(source.contains("Label(\"Paste\", systemImage: \"doc.on.clipboard\")"))
     }
 
@@ -109,6 +116,18 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("OutputCopyButton("))
         XCTAssertTrue(source.contains("model.copyLatex()"))
         XCTAssertTrue(source.contains("Label(\"Copy\", systemImage: \"doc.on.doc\")"))
+    }
+
+    func testOutputUsesNSTextViewSyntaxEditor() throws {
+        let outputSource = try sourceFile("Sources/SnapTexApp/Views/OutputPane.swift")
+        let editorSource = try sourceFile("Sources/SnapTexApp/Views/LaTeXSyntaxTextView.swift")
+
+        XCTAssertTrue(outputSource.contains("LaTeXSyntaxTextView("))
+        XCTAssertTrue(outputSource.contains("validationIssue: model.validationIssue"))
+        XCTAssertFalse(outputSource.contains("TextEditor(text: $model.latexOutput)"))
+        XCTAssertTrue(editorSource.contains("NSViewRepresentable"))
+        XCTAssertTrue(editorSource.contains("NSTextView"))
+        XCTAssertTrue(editorSource.contains("LaTeXSyntaxHighlighter.highlightedString"))
     }
 
     func testOutputAlternativesHeadingDropsOCRPrefix() throws {
@@ -125,6 +144,26 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("@State private var isHovered = false"))
         XCTAssertTrue(source.contains(".onHover"))
         XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.12), value: isHovered)"))
+    }
+
+    func testPrimaryToolbarActionsUseMatchingLiquidHoverStyle() throws {
+        let contentView = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
+        let theme = try sourceFile("Sources/SnapTexApp/Support/AppTheme.swift")
+        let addButtonSource = try viewSource(named: "AddImageButton", in: contentView)
+
+        XCTAssertTrue(contentView.contains(".buttonStyle(LiquidSnipButtonStyle())"))
+        XCTAssertTrue(addButtonSource.contains(".buttonStyle(LiquidSnipButtonStyle())"))
+        XCTAssertTrue(addButtonSource.contains(".font(.system(size: CGFloat(model.settings.snipButtonFontSize), weight: .semibold))"))
+        XCTAssertTrue(addButtonSource.contains(".frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)"))
+        XCTAssertTrue(theme.contains("struct LiquidSnipButtonStyle: ButtonStyle"))
+        XCTAssertTrue(theme.contains("LiquidSnipTrackingArea("))
+        XCTAssertTrue(theme.contains("RadialGradient("))
+        XCTAssertTrue(theme.contains("AppTheme.snipAccent"))
+        XCTAssertTrue(theme.contains("endRadius: max(proxy.size.width, proxy.size.height) * 1.18"))
+        XCTAssertTrue(theme.contains(".cursorUpdate"))
+        XCTAssertTrue(theme.contains("NSCursor.pointingHand.set()"))
+        XCTAssertFalse(contentView.contains(".buttonStyle(GraphitePrimaryButtonStyle())"))
+        XCTAssertFalse(addButtonSource.contains(".buttonStyle(GraphiteSecondaryButtonStyle())"))
     }
 
     func testConfidenceIsNotDisplayedWithoutModelProvidedConfidence() throws {
@@ -168,12 +207,13 @@ final class AppLayoutMetricsTests: XCTestCase {
 
     func testRenderedPreviewHeaderKeepsTitleSingleLine() throws {
         let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
-        guard let titleRange = source.range(of: "Text(\"Rendered Output\")") else {
-            XCTFail("Rendered Output header title should exist")
+        guard let titleRange = source.range(of: "Text(\"Output\")") else {
+            XCTFail("Output header title should exist")
             return
         }
 
         XCTAssertTrue(source[titleRange.upperBound...].prefix(140).contains(".lineLimit(1)"))
+        XCTAssertFalse(source.contains("Text(\"Rendered Output\")"))
     }
 
     func testRenderedPreviewHeaderStacksModelBelowTitleAndCentersActions() throws {
@@ -237,6 +277,28 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("ZoomIconButton"))
         XCTAssertTrue(source.contains(".onHover"))
         XCTAssertFalse(source.contains(".buttonStyle(.borderless)"))
+    }
+
+    func testOutputRetryIconKeepsCounterclockwiseGlyphAndRunsRecognition() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
+
+        guard let iconRange = source.range(of: "systemName: \"arrow.counterclockwise\"") else {
+            XCTFail("Retry icon should keep the counterclockwise glyph")
+            return
+        }
+
+        let retryButtonSource = source[iconRange.lowerBound...].prefix(240)
+        XCTAssertTrue(retryButtonSource.contains("help: \"Retry recognition\""))
+        XCTAssertTrue(retryButtonSource.contains("isDisabled: !model.canRetry"))
+        XCTAssertTrue(retryButtonSource.contains("model.retry()"))
+        XCTAssertFalse(source.contains("model.resetRenderedPreviewZoom()"))
+    }
+
+    func testCaptureSurfaceDoesNotUseRecognizingGlowBorder() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
+
+        XCTAssertFalse(source.contains("RecognitionGlowBorder"))
+        XCTAssertFalse(source.contains(".repeatForever(autoreverses: false)"))
     }
 
     func testGraphiteThemeAvoidsBlueGradientStyling() throws {
@@ -336,6 +398,18 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertFalse(historyView.contains("let folderLabel: String?"))
     }
 
+    func testHistoryRowsUseSnipCardTreatment() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+
+        XCTAssertTrue(historyView.contains("private let historySidebarHorizontalPadding: CGFloat = 12"))
+        XCTAssertFalse(historyView.contains("HistorySnipBadge("))
+        XCTAssertFalse(historyView.contains("private struct HistorySnipBadge"))
+        XCTAssertFalse(historyView.contains("Image(systemName: \"crop\")"))
+        XCTAssertTrue(historyView.contains("AppTheme.historySnipBackground"))
+        XCTAssertTrue(historyView.contains("AppTheme.historySelectedBackground"))
+        XCTAssertTrue(historyView.contains(".opacity(0.72)"))
+    }
+
     func testFoldersCanBeCollapsedFromFoldersHeader() throws {
         let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
 
@@ -397,7 +471,7 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(settingsView.contains("title: \"Sidebar labels\""))
         XCTAssertTrue(settingsView.contains("description: \"All Snaps, Folders, and folder names\""))
         XCTAssertTrue(settingsView.contains("title: \"Pane headings\""))
-        XCTAssertTrue(settingsView.contains("description: \"History, Capture, Rendered Output, LaTeX\""))
+        XCTAssertTrue(settingsView.contains("description: \"History, Capture, Output, LaTeX\""))
         XCTAssertTrue(settingsView.contains("title: \"Toolbar controls\""))
         XCTAssertTrue(settingsView.contains("description: \"Model controls and status\""))
         XCTAssertTrue(settingsView.contains("title: \"Snip button\""))
@@ -694,6 +768,15 @@ final class AppLayoutMetricsTests: XCTestCase {
             contentsOf: try Self.sourceRoot().appendingPathComponent(path),
             encoding: .utf8
         )
+    }
+
+    private func viewSource(named viewName: String, in source: String) throws -> Substring {
+        guard let start = source.range(of: "private struct \(viewName)")?.lowerBound else {
+            throw XCTSkip("Missing view source for \(viewName)")
+        }
+        let remainder = source[start...]
+        let nextView = remainder.range(of: "\nprivate struct ", options: [], range: remainder.index(after: start)..<remainder.endIndex)
+        return remainder[..<(nextView?.lowerBound ?? remainder.endIndex)]
     }
 
     @MainActor

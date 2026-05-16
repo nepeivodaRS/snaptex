@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import SnapTexCore
 
@@ -18,12 +19,13 @@ struct OutputPane: View {
             }
             .frame(maxWidth: .infinity)
 
-            TextEditor(text: $model.latexOutput)
-                .font(.system(
-                    size: CGFloat(model.settings.latexEditorFontSize),
-                    design: model.settings.latexEditorFontFamily.swiftUIDesign
-                ))
-                .scrollContentBackground(.hidden)
+            LaTeXSyntaxTextView(
+                text: $model.latexOutput,
+                font: model.settings.latexEditorFontFamily.nsFont(
+                    size: CGFloat(model.settings.latexEditorFontSize)
+                ),
+                validationIssue: model.validationIssue
+            )
                 .background(AppTheme.insetBackground)
                 .graphitePanel(background: AppTheme.insetBackground)
                 .frame(maxWidth: .infinity, minHeight: 160)
@@ -130,14 +132,14 @@ private struct OutputFormatMenu: View {
 }
 
 private extension LaTeXEditorFontFamily {
-    var swiftUIDesign: Font.Design {
+    func nsFont(size: CGFloat) -> NSFont {
         switch self {
         case .monospaced:
-            return .monospaced
+            return .monospacedSystemFont(ofSize: size, weight: .regular)
         case .system:
-            return .default
+            return .systemFont(ofSize: size)
         case .serif:
-            return .serif
+            return NSFont(name: "Times New Roman", size: size) ?? .systemFont(ofSize: size)
         }
     }
 }

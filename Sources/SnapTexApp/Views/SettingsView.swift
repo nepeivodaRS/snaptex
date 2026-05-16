@@ -144,7 +144,7 @@ struct SettingsView: View {
 
             SettingsFontRow(
                 title: "Pane headings",
-                description: "History, Capture, Rendered Output, LaTeX",
+                description: "History, Capture, Output, LaTeX",
                 value: paneTitleFontSizeBinding
             )
 

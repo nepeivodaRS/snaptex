@@ -2,6 +2,8 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+private let historySidebarHorizontalPadding: CGFloat = 12
+
 struct HistorySidebarView: View {
     @ObservedObject var model: AppModel
     @State private var renamingFolderID: HistoryFolder.ID?
@@ -14,7 +16,7 @@ struct HistorySidebarView: View {
                 model: model,
                 renamingFolderID: $renamingFolderID
             )
-                .padding(.horizontal, 8)
+                .padding(.horizontal, historySidebarHorizontalPadding)
                 .padding(.vertical, 8)
                 .overlay(alignment: .bottom) {
                     Rectangle()
@@ -59,7 +61,12 @@ struct HistorySidebarView: View {
                             .onDrag {
                                 return NSItemProvider(object: HistoryDragPayload.entry(entry.id) as NSString)
                             }
-                            .listRowInsets(EdgeInsets(top: 5, leading: 8, bottom: 5, trailing: 8))
+                            .listRowInsets(EdgeInsets(
+                                top: 5,
+                                leading: historySidebarHorizontalPadding,
+                                bottom: 5,
+                                trailing: historySidebarHorizontalPadding
+                            ))
                             .listRowSeparator(.hidden)
                             .listRowBackground(Color.clear)
                         }
@@ -100,8 +107,8 @@ struct HistorySidebarView: View {
                 }
             )
         }
-        .padding(.leading, 14)
-        .padding(.trailing, 8)
+        .padding(.leading, historySidebarHorizontalPadding)
+        .padding(.trailing, historySidebarHorizontalPadding)
         .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AppTheme.windowBackground)
@@ -252,7 +259,7 @@ private struct HistoryScopePicker: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HistoryScopeRow(
-                title: "All Snaps",
+                title: "All Captures",
                 systemName: "clock.arrow.circlepath",
                 count: model.historyCount(for: .all),
                 isSelected: model.selectedHistoryScope == .all,
@@ -621,6 +628,7 @@ private struct HistoryRow: View {
 
     @State private var isRenaming = false
     @State private var draftTitle = ""
+    @State private var isHovered = false
     @FocusState private var titleFieldFocused: Bool
 
     var body: some View {
@@ -690,10 +698,12 @@ private struct HistoryRow: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 6)
         .graphitePanel(
-            background: isSelected ? AppTheme.selectedBackground : Color.clear,
-            border: isSelected ? AppTheme.selectedBorder : Color.clear,
+            background: rowBackground,
+            border: rowBorder,
             radius: 7
         )
+        .shadow(color: Color.black.opacity(isHovered || isSelected ? 0.12 : 0), radius: 5, y: 1)
+        .onHover { isHovered = $0 }
         .contextMenu {
             Button("Rename", action: beginRename)
             Button("Copy", action: copy)
@@ -756,16 +766,31 @@ private struct HistoryRow: View {
         .system(size: CGFloat(metadataFontSize))
     }
 
+    private var rowBackground: Color {
+        if isSelected {
+            return AppTheme.historySelectedBackground
+        }
+        return isHovered ? AppTheme.historySnipHoverBackground : AppTheme.historySnipBackground
+    }
+
+    private var rowBorder: Color {
+        if isSelected {
+            return AppTheme.selectedBorder
+        }
+        return isHovered ? Color.white.opacity(0.13) : AppTheme.border.opacity(0.72)
+    }
+
     private var thumbnail: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 5)
-                .fill(AppTheme.insetBackground)
+                .fill(AppTheme.historySnipBackground)
 
             if let image = entry.image {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
                     .padding(4)
+                    .opacity(0.72)
             } else {
                 Image(systemName: "function")
                     .font(.system(size: 18))

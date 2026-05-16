@@ -38,10 +38,28 @@ public enum LaTeXValidator {
         "\\rm",
         "\\tt"
     ]
+    private static let lineBreakAllowedEnvironments = [
+        "aligned",
+        "alignedat",
+        "array",
+        "bmatrix",
+        "cases",
+        "gathered",
+        "matrix",
+        "pmatrix",
+        "smallmatrix",
+        "split",
+        "Vmatrix",
+        "vmatrix"
+    ]
 
     public static func firstIssue(in latex: String) -> LaTeXValidationIssue? {
         if let unsupported = firstUnsupportedCommand(in: latex) {
             return unsupported
+        }
+
+        if let lineBreak = firstUnexpectedLineBreakCommand(in: latex) {
+            return lineBreak
         }
 
         return firstBraceIssue(in: latex)
@@ -66,6 +84,42 @@ public enum LaTeXValidator {
             )
         }
         return nil
+    }
+
+    private static func firstUnexpectedLineBreakCommand(in source: String) -> LaTeXValidationIssue? {
+        var searchRange = source.startIndex..<source.endIndex
+        while let range = source.range(of: #"\\"#, range: searchRange) {
+            if !isLineBreakAllowed(in: source, at: range.lowerBound) {
+                return LaTeXValidationIssue(
+                    message: #"Unexpected line break command \\."#,
+                    location: source.distance(from: source.startIndex, to: range.lowerBound),
+                    length: 2,
+                    source: source
+                )
+            }
+            searchRange = range.upperBound..<source.endIndex
+        }
+        return nil
+    }
+
+    private static func isLineBreakAllowed(in source: String, at index: String.Index) -> Bool {
+        for environment in lineBreakAllowedEnvironments {
+            let open = "\\begin{\(environment)}"
+            let close = "\\end{\(environment)}"
+            var searchRange = source.startIndex..<source.endIndex
+
+            while let openRange = source.range(of: open, range: searchRange) {
+                guard let closeRange = source.range(of: close, range: openRange.upperBound..<source.endIndex) else {
+                    break
+                }
+
+                if openRange.upperBound <= index && index < closeRange.lowerBound {
+                    return true
+                }
+                searchRange = closeRange.upperBound..<source.endIndex
+            }
+        }
+        return false
     }
 
     private static func firstBraceIssue(in source: String) -> LaTeXValidationIssue? {

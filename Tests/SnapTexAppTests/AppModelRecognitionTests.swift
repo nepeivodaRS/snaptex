@@ -155,6 +155,24 @@ final class AppModelRecognitionTests: XCTestCase {
         XCTAssertFalse(model.canExportFormula)
     }
 
+    func testManualLatexEditRefreshesValidationIssueForSyntaxEditor() {
+        let model = AppModel()
+
+        model.latexOutput = #"d^{5}x = (\beta^{4}\ {}d beta\\))\times(\operatorname{sin}3\gamma d\gamma d\Omega)"#
+
+        XCTAssertEqual("Unexpected line break command \\\\.", model.validationIssue?.message)
+    }
+
+    func testManualLatexEditShowsPreviewIssueForUnexpectedLineBreak() async {
+        let model = AppModel()
+
+        model.latexOutput = #"d^{5}x = (\beta^{4}\ {}d beta\\))\times(\operatorname{sin}3\gamma d\gamma d\Omega)"#
+
+        try? await Task.sleep(nanoseconds: 320_000_000)
+        XCTAssertEqual("", model.previewLatex)
+        XCTAssertEqual("Unexpected line break command \\\\.", model.previewIssue?.message)
+    }
+
     func testRecognizingHistoryItemLocksOnlyTheCurrentItem() {
         let model = AppModel()
         let recognized = OCRHistoryEntry(
@@ -223,6 +241,18 @@ final class AppModelRecognitionTests: XCTestCase {
         model.isSnipping = false
 
         XCTAssertTrue(model.canStartSnip)
+    }
+
+    func testFinderAddCanStartUnlessRegionSelectionIsActive() {
+        let model = AppModel()
+
+        XCTAssertTrue(model.canAddFromFinder)
+
+        model.isProcessing = true
+        XCTAssertTrue(model.canAddFromFinder)
+
+        model.isSnipping = true
+        XCTAssertFalse(model.canAddFromFinder)
     }
 
     func testOCRPassChangesDoNotChangeWorkerConfiguration() {

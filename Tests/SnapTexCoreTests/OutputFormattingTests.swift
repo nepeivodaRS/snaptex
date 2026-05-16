@@ -24,4 +24,21 @@ final class OutputFormattingTests: XCTestCase {
 
         XCTAssertEqual("Unsupported or unknown command \\sl.", issue?.message)
     }
+
+    func testValidatorRejectsUnexpectedTopLevelLineBreakCommand() throws {
+        let latex = #"d^{5}x = (\beta^{4}\ {}d beta\\))\times(\operatorname{sin}3\gamma d\gamma d\Omega)"#
+        let badRange = try XCTUnwrap(latex.range(of: #"\\"#))
+
+        let issue = LaTeXValidator.firstIssue(in: latex)
+
+        XCTAssertEqual("Unexpected line break command \\\\.", issue?.message)
+        XCTAssertEqual(latex.distance(from: latex.startIndex, to: badRange.lowerBound), issue?.location)
+        XCTAssertEqual(2, issue?.length)
+    }
+
+    func testValidatorAllowsLineBreakInsideMatrixEnvironment() {
+        let issue = LaTeXValidator.firstIssue(in: #"\begin{matrix}a&b\\c&d\end{matrix}"#)
+
+        XCTAssertNil(issue)
+    }
 }

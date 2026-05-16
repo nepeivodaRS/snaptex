@@ -28,8 +28,6 @@ struct CapturePreviewPane: View {
                 .foregroundStyle(.primary)
 
             Spacer()
-
-            CaptureHeaderActions(model: model)
         }
     }
 
@@ -124,10 +122,10 @@ struct CapturePreviewPane: View {
 
             ZoomIconButton(
                 systemName: "arrow.counterclockwise",
-                help: "Reset rendered output zoom",
-                isDisabled: model.renderedPreviewFontSize == RenderedPreviewZoom.defaultFontSize
+                help: "Retry recognition",
+                isDisabled: !model.canRetry
             ) {
-                model.resetRenderedPreviewZoom()
+                model.retry()
             }
         }
         .controlSize(.small)
@@ -162,7 +160,7 @@ struct CapturePreviewPane: View {
     }
 
     private var renderedOutputTitle: some View {
-        Text("Rendered Output")
+        Text("Output")
             .font(paneTitleFont)
             .foregroundStyle(.primary)
             .lineLimit(1)
@@ -187,35 +185,6 @@ struct CapturePreviewPane: View {
             previewZoomControls.frame(height: renderedOutputActionHeight, alignment: .center)
         }
         .frame(height: renderedOutputActionHeight, alignment: .center)
-    }
-}
-
-private struct CaptureHeaderActions: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                model.retry()
-            } label: {
-                Label("Retry", systemImage: "arrow.clockwise")
-                    .frame(minWidth: AppLayoutMetrics.captureHeaderActionButtonMinWidth)
-            }
-            .buttonStyle(GraphiteSecondaryButtonStyle())
-            .disabled(!model.canRetry)
-            .help("Run OCR again on the last input")
-
-            Button {
-                model.pasteImageFromClipboard()
-            } label: {
-                Label("Add", systemImage: "plus")
-                    .frame(minWidth: AppLayoutMetrics.captureHeaderActionButtonMinWidth)
-            }
-            .buttonStyle(GraphiteSecondaryButtonStyle())
-            .disabled(model.isSnipping || !model.canPasteImage)
-            .help("Add an image from the clipboard")
-        }
-        .fixedSize(horizontal: true, vertical: false)
     }
 }
 
