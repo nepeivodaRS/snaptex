@@ -150,28 +150,22 @@ private struct ExportFormulaMenu: View {
     @State private var isExportPressed = false
 
     var body: some View {
-        Menu {
-            ForEach(FormulaExportFormat.allCases) { format in
-                Button(format.title) {
-                    model.exportFormula(as: format)
-                }
-            }
-        } label: {
+        ZStack {
             ExportMenuLabel(
                 isHovered: isExportHovered,
                 isPressed: isExportPressed,
                 isEnabled: model.canExportFormula
             )
+
+            ExportFormulaMenuBridge(
+                isHovered: $isExportHovered,
+                isPressed: $isExportPressed,
+                isEnabled: model.canExportFormula
+            ) { format in
+                model.exportFormula(as: format)
+            }
+            .frame(width: 88, height: 30)
         }
-        .menuStyle(.borderlessButton)
-        .disabled(!model.canExportFormula)
-        .onHover { isExportHovered = $0 }
-        .onLongPressGesture(
-            minimumDuration: 0,
-            maximumDistance: 8,
-            pressing: { isExportPressed = $0 },
-            perform: {}
-        )
         .animation(.easeOut(duration: 0.12), value: isExportHovered)
         .animation(.easeOut(duration: 0.08), value: isExportPressed)
         .help("Export the rendered formula as a transparent PNG or EPS")
@@ -222,6 +216,134 @@ private struct ExportMenuLabel: View {
             return AppTheme.selectedBorder
         }
         return isHovered ? AppTheme.primaryButtonBackground.opacity(0.40) : AppTheme.border
+    }
+}
+
+private struct ExportFormulaMenuBridge: NSViewRepresentable {
+    @Binding var isHovered: Bool
+    @Binding var isPressed: Bool
+    let isEnabled: Bool
+    let export: (FormulaExportFormat) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            isHovered: $isHovered,
+            isPressed: $isPressed,
+            isEnabled: isEnabled,
+            export: export
+        )
+    }
+
+    func makeNSView(context: Context) -> ExportMenuTriggerView {
+        let view = ExportMenuTriggerView()
+        view.coordinator = context.coordinator
+        return view
+    }
+
+    func updateNSView(_ view: ExportMenuTriggerView, context: Context) {
+        context.coordinator.isHovered = $isHovered
+        context.coordinator.isPressed = $isPressed
+        context.coordinator.isEnabled = isEnabled
+        context.coordinator.export = export
+        view.coordinator = context.coordinator
+    }
+
+    final class Coordinator: NSObject {
+        var isHovered: Binding<Bool>
+        var isPressed: Binding<Bool>
+        var isEnabled: Bool
+        var export: (FormulaExportFormat) -> Void
+
+        init(
+            isHovered: Binding<Bool>,
+            isPressed: Binding<Bool>,
+            isEnabled: Bool,
+            export: @escaping (FormulaExportFormat) -> Void
+        ) {
+            self.isHovered = isHovered
+            self.isPressed = isPressed
+            self.isEnabled = isEnabled
+            self.export = export
+        }
+
+        func makeMenu() -> NSMenu {
+            let menu = NSMenu()
+            for (index, format) in FormulaExportFormat.allCases.enumerated() {
+                let item = NSMenuItem(
+                    title: format.title,
+                    action: #selector(selectFormat(_:)),
+                    keyEquivalent: ""
+                )
+                item.representedObject = index
+                item.target = self
+                menu.addItem(item)
+            }
+            return menu
+        }
+
+        @objc private func selectFormat(_ sender: NSMenuItem) {
+            guard let index = sender.representedObject as? Int,
+                  FormulaExportFormat.allCases.indices.contains(index) else {
+                return
+            }
+            export(FormulaExportFormat.allCases[index])
+        }
+    }
+
+    final class ExportMenuTriggerView: NSView {
+        weak var coordinator: Coordinator?
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            for trackingArea in trackingAreas {
+                removeTrackingArea(trackingArea)
+            }
+            addTrackingArea(
+                NSTrackingArea(
+                    rect: .zero,
+                    options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited],
+                    owner: self
+                )
+            )
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard coordinator?.isEnabled == true,
+                  let event = window?.currentEvent else {
+                return nil
+            }
+
+            if event.type == .leftMouseDown || event.type == .rightMouseDown {
+                return self
+            }
+            return nil
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            coordinator?.isHovered.wrappedValue = coordinator?.isEnabled == true
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            coordinator?.isHovered.wrappedValue = false
+            coordinator?.isPressed.wrappedValue = false
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            showMenu(with: event)
+        }
+
+        override func rightMouseDown(with event: NSEvent) {
+            showMenu(with: event)
+        }
+
+        private func showMenu(with event: NSEvent) {
+            guard let coordinator, coordinator.isEnabled else {
+                return
+            }
+            coordinator.isPressed.wrappedValue = true
+            NSMenu.popUpContextMenu(coordinator.makeMenu(), with: event, for: self)
+            coordinator.isPressed.wrappedValue = false
+        }
     }
 }
 

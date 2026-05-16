@@ -4,7 +4,8 @@ import XCTest
 
 final class AppLayoutMetricsTests: XCTestCase {
     func testMinimumWindowWidthFitsCurrentToolbarLabels() {
-        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, 1_280)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, 1_020)
+        XCTAssertLessThanOrEqual(AppLayoutMetrics.mainWindowMinWidth, 1_120)
     }
 
     func testHistoryPaneAllowsWiderFolderOrganization() {
@@ -16,6 +17,42 @@ final class AppLayoutMetricsTests: XCTestCase {
     func testToolbarLabelsReserveSingleLineWidths() {
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarModelLabelWidth, 76)
         XCTAssertGreaterThanOrEqual(AppLayoutMetrics.toolbarPassesLabelWidth, 82)
+    }
+
+    func testToolbarHasResponsiveFullAndCompactLayouts() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
+
+        XCTAssertTrue(source.contains("ViewThatFits(in: .horizontal)"))
+        XCTAssertTrue(source.contains("FullToolbarLayout("))
+        XCTAssertTrue(source.contains("CompactToolbarLayout("))
+        XCTAssertTrue(source.contains("ToolbarActionStrip("))
+        XCTAssertTrue(source.contains("RecognitionControlGroup("))
+    }
+
+    func testCaptureEmptyStateDoesNotExposeSnipAndPasteActions() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
+
+        XCTAssertFalse(source.contains("CaptureEmptyStateActions("))
+        XCTAssertFalse(source.contains("model.snip()"))
+        XCTAssertFalse(source.contains("model.pasteImageFromClipboard()"))
+        XCTAssertFalse(source.contains("Label(\"Paste\", systemImage: \"doc.on.clipboard\")"))
+    }
+
+    func testOutputHeaderExposesCopyActionNextToLatexEditor() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/OutputPane.swift")
+
+        XCTAssertTrue(source.contains("OutputCopyButton("))
+        XCTAssertTrue(source.contains("model.copyLatex()"))
+        XCTAssertTrue(source.contains("Label(\"Copy\", systemImage: \"doc.on.doc\")"))
+    }
+
+    func testGraphiteButtonsAnimateHoverState() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Support/AppTheme.swift")
+
+        XCTAssertTrue(source.contains("GraphiteButtonBody"))
+        XCTAssertTrue(source.contains("@State private var isHovered = false"))
+        XCTAssertTrue(source.contains(".onHover"))
+        XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.12), value: isHovered)"))
     }
 
     func testConfidenceIsNotDisplayedWithoutModelProvidedConfidence() throws {
@@ -61,10 +98,28 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("@State private var isExportHovered = false"))
         XCTAssertTrue(source.contains("@State private var isExportPressed = false"))
         XCTAssertTrue(source.contains("ExportMenuLabel("))
-        XCTAssertTrue(source.contains(".onHover { isExportHovered = $0 }"))
-        XCTAssertTrue(source.contains(".onLongPressGesture("))
+        XCTAssertTrue(source.contains("ExportFormulaMenuBridge("))
+        XCTAssertTrue(source.contains("isHovered: $isExportHovered"))
+        XCTAssertTrue(source.contains("isPressed: $isExportPressed"))
         XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.12), value: isExportHovered)"))
         XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.08), value: isExportPressed)"))
+    }
+
+    func testRecognitionControlsUseIndividualSegmentHoverAndSlidingSelection() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
+
+        XCTAssertTrue(source.contains("Text(\"OCR model\")"))
+        XCTAssertTrue(source.contains("Text(\"OCR passes\")"))
+        XCTAssertTrue(source.contains("SmoothRecognitionSegmentedControl("))
+        XCTAssertTrue(source.contains("@State private var hoveredOption: Option?"))
+        XCTAssertTrue(source.contains("hoveredOption == option"))
+        XCTAssertTrue(source.contains("private var selectedIndicator"))
+        XCTAssertTrue(source.contains(".offset(x: CGFloat(selectedIndex) * segmentWidth + 2)"))
+        XCTAssertTrue(source.contains(".animation(.spring(response: 0.28, dampingFraction: 0.82), value: selectedIndex)"))
+        XCTAssertTrue(source.contains(".onHover { isHovered in"))
+        XCTAssertFalse(source.contains("Picker(\"OCR model\""))
+        XCTAssertFalse(source.contains("Picker(\"OCR passes\""))
+        XCTAssertFalse(source.contains("HoverableRecognitionControl("))
     }
 
     func testRecognitionControlsAreDisabledOnlyForCurrentRecognizingItem() throws {
@@ -135,6 +190,9 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyView.contains("NSMenuItem(title: \"\""))
         XCTAssertTrue(historyView.contains("Change Folder Color"))
         XCTAssertTrue(historyView.contains("image.isTemplate = false"))
+        XCTAssertTrue(historyView.contains("NSSize(width: 34, height: 18)"))
+        XCTAssertTrue(historyView.contains("let colorInset: CGFloat = 4"))
+        XCTAssertTrue(historyView.contains("let checkmarkRightX = size.width - colorInset"))
         XCTAssertFalse(historyView.contains("Move Folder Up"))
         XCTAssertFalse(historyView.contains("Move Folder Down"))
         XCTAssertFalse(historyView.contains("canMoveUp"))
@@ -210,8 +268,14 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyView.contains("HistoryFolderAssignmentMenu"))
         XCTAssertTrue(historyView.contains("HistoryFolderAssignmentIcon("))
         XCTAssertTrue(historyView.contains("FolderAssignmentMenuBridge: NSViewRepresentable"))
+        XCTAssertTrue(historyView.contains("@State private var isFolderMenuHovered = false"))
+        XCTAssertTrue(historyView.contains("@State private var isFolderMenuPressed = false"))
+        XCTAssertTrue(historyView.contains("isHovered: $isFolderMenuHovered"))
+        XCTAssertTrue(historyView.contains("isPressed: $isFolderMenuPressed"))
         XCTAssertTrue(historyView.contains("systemName: currentFolderID == nil ? \"folder\" : \"folder.fill\""))
         XCTAssertTrue(historyView.contains("color: folderBadgeColor?.tint ?? Color.secondary.opacity(0.45)"))
+        XCTAssertTrue(historyView.contains("folderIconBackgroundOpacity"))
+        XCTAssertTrue(historyView.contains(".scaleEffect(isPressed ? 0.94 : isHovered ? 1.05 : 1)"))
         XCTAssertTrue(historyView.contains("showMenu(with: event)"))
         XCTAssertFalse(historyView.contains("HistoryMoveMenu("))
         XCTAssertFalse(historyView.contains(".foregroundStyle(folderBadgeColor?.tint ?? Color.secondary.opacity(0.45))"))

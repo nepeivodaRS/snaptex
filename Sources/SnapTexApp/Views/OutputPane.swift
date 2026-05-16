@@ -10,6 +10,7 @@ struct OutputPane: View {
                 Text("LaTeX")
                     .font(.headline)
                 Spacer()
+                OutputCopyButton(model: model)
                 OutputFormatMenu(
                     selection: outputFormatSelection,
                     isDisabled: !model.canChangeOutputFormat
@@ -67,6 +68,21 @@ struct OutputPane: View {
             get: { model.currentOutputFormat },
             set: { model.setCurrentOutputFormat($0) }
         )
+    }
+}
+
+private struct OutputCopyButton: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        Button {
+            model.copyLatex()
+        } label: {
+            Label("Copy", systemImage: "doc.on.doc")
+        }
+        .buttonStyle(GraphiteSecondaryButtonStyle())
+        .disabled(!model.canCopy)
+        .help("Copy visible LaTeX")
     }
 }
 

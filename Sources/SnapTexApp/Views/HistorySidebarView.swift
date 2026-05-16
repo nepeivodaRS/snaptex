@@ -802,16 +802,23 @@ private struct HistoryFolderAssignmentMenu: View {
     let moveToFolder: (HistoryFolder.ID?) -> Void
     let moveToNewFolder: () -> Void
 
+    @State private var isFolderMenuHovered = false
+    @State private var isFolderMenuPressed = false
+
     var body: some View {
         ZStack {
             HistoryFolderAssignmentIcon(
                 systemName: currentFolderID == nil ? "folder" : "folder.fill",
-                color: folderBadgeColor?.tint ?? Color.secondary.opacity(0.45)
+                color: folderBadgeColor?.tint ?? Color.secondary.opacity(0.45),
+                isHovered: isFolderMenuHovered,
+                isPressed: isFolderMenuPressed
             )
 
             FolderAssignmentMenuBridge(
                 currentFolderID: currentFolderID,
                 folders: folders,
+                isHovered: $isFolderMenuHovered,
+                isPressed: $isFolderMenuPressed,
                 moveToFolder: moveToFolder,
                 moveToNewFolder: moveToNewFolder
             )
@@ -824,6 +831,8 @@ private struct HistoryFolderAssignmentMenu: View {
 private struct HistoryFolderAssignmentIcon: View {
     let systemName: String
     let color: Color
+    let isHovered: Bool
+    let isPressed: Bool
 
     var body: some View {
         Image(systemName: systemName)
@@ -831,12 +840,32 @@ private struct HistoryFolderAssignmentIcon: View {
             .foregroundStyle(color)
             .frame(width: historyRowControlSize, height: historyRowControlSize)
             .contentShape(RoundedRectangle(cornerRadius: 5))
+            .background {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(color.opacity(folderIconBackgroundOpacity))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 5)
+                    .strokeBorder(color.opacity(isHovered || isPressed ? 0.35 : 0), lineWidth: 1)
+            }
+            .scaleEffect(isPressed ? 0.94 : isHovered ? 1.05 : 1)
+            .animation(.easeOut(duration: 0.08), value: isPressed)
+            .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+
+    private var folderIconBackgroundOpacity: Double {
+        if isPressed {
+            return 0.22
+        }
+        return isHovered ? 0.12 : 0
     }
 }
 
 private struct FolderAssignmentMenuBridge: NSViewRepresentable {
     let currentFolderID: HistoryFolder.ID?
     let folders: [HistoryFolder]
+    @Binding var isHovered: Bool
+    @Binding var isPressed: Bool
     let moveToFolder: (HistoryFolder.ID?) -> Void
     let moveToNewFolder: () -> Void
 
@@ -844,6 +873,8 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
         Coordinator(
             currentFolderID: currentFolderID,
             folders: folders,
+            isHovered: $isHovered,
+            isPressed: $isPressed,
             moveToFolder: moveToFolder,
             moveToNewFolder: moveToNewFolder
         )
@@ -858,6 +889,8 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
     func updateNSView(_ view: MenuTriggerView, context: Context) {
         context.coordinator.currentFolderID = currentFolderID
         context.coordinator.folders = folders
+        context.coordinator.isHovered = $isHovered
+        context.coordinator.isPressed = $isPressed
         context.coordinator.moveToFolder = moveToFolder
         context.coordinator.moveToNewFolder = moveToNewFolder
         view.coordinator = context.coordinator
@@ -866,17 +899,23 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
     final class Coordinator: NSObject {
         var currentFolderID: HistoryFolder.ID?
         var folders: [HistoryFolder]
+        var isHovered: Binding<Bool>
+        var isPressed: Binding<Bool>
         var moveToFolder: (HistoryFolder.ID?) -> Void
         var moveToNewFolder: () -> Void
 
         init(
             currentFolderID: HistoryFolder.ID?,
             folders: [HistoryFolder],
+            isHovered: Binding<Bool>,
+            isPressed: Binding<Bool>,
             moveToFolder: @escaping (HistoryFolder.ID?) -> Void,
             moveToNewFolder: @escaping () -> Void
         ) {
             self.currentFolderID = currentFolderID
             self.folders = folders
+            self.isHovered = isHovered
+            self.isPressed = isPressed
             self.moveToFolder = moveToFolder
             self.moveToNewFolder = moveToNewFolder
         }
@@ -948,6 +987,20 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
     final class MenuTriggerView: NSView {
         weak var coordinator: Coordinator?
 
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            for trackingArea in trackingAreas {
+                removeTrackingArea(trackingArea)
+            }
+            addTrackingArea(
+                NSTrackingArea(
+                    rect: .zero,
+                    options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited],
+                    owner: self
+                )
+            )
+        }
+
         override func hitTest(_ point: NSPoint) -> NSView? {
             guard let event = window?.currentEvent else {
                 return nil
@@ -957,6 +1010,15 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
                 return self
             }
             return nil
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            coordinator?.isHovered.wrappedValue = true
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            coordinator?.isHovered.wrappedValue = false
+            coordinator?.isPressed.wrappedValue = false
         }
 
         override func mouseDown(with event: NSEvent) {
@@ -971,7 +1033,9 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
             guard let menu = coordinator?.makeMenu() else {
                 return
             }
+            coordinator?.isPressed.wrappedValue = true
             NSMenu.popUpContextMenu(menu, with: event, for: self)
+            coordinator?.isPressed.wrappedValue = false
         }
     }
 }
@@ -1206,11 +1270,13 @@ private struct FolderContextMenuBridge: NSViewRepresentable {
 
 private extension HistoryFolderColor {
     func menuSwatchImage(isSelected: Bool) -> NSImage {
-        let size = NSSize(width: 24, height: 18)
+        let size = NSSize(width: 34, height: 18)
+        let colorInset: CGFloat = 4
+        let checkmarkRightX = size.width - colorInset
         let image = NSImage(size: size)
         image.lockFocus()
 
-        let circleRect = NSRect(x: 4, y: 3, width: 12, height: 12)
+        let circleRect = NSRect(x: colorInset, y: 3, width: 12, height: 12)
         menuNSColor.setFill()
         NSBezierPath(ovalIn: circleRect).fill()
         NSColor.white.withAlphaComponent(0.35).setStroke()
@@ -1218,9 +1284,9 @@ private extension HistoryFolderColor {
 
         if isSelected {
             let checkmark = NSBezierPath()
-            checkmark.move(to: NSPoint(x: 18, y: 8))
-            checkmark.line(to: NSPoint(x: 20, y: 6))
-            checkmark.line(to: NSPoint(x: 23, y: 12))
+            checkmark.move(to: NSPoint(x: checkmarkRightX - 6, y: 8))
+            checkmark.line(to: NSPoint(x: checkmarkRightX - 4, y: 6))
+            checkmark.line(to: NSPoint(x: checkmarkRightX, y: 12))
             NSColor.labelColor.setStroke()
             checkmark.lineWidth = 1.6
             checkmark.lineCapStyle = .round
