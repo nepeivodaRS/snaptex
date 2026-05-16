@@ -180,16 +180,48 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(theme.contains("@State private var glowLocation = CGPoint(x: 48, y: 16)"))
         XCTAssertTrue(theme.contains(".onChange(of: mouseLocation) { updateGlowLocation($0) }"))
         XCTAssertTrue(theme.contains("private func updateGlowLocation(_ location: CGPoint)"))
-        XCTAssertTrue(theme.contains(".spring(response: 0.68, dampingFraction: 0.72, blendDuration: 0.18)"))
+        XCTAssertTrue(theme.contains("private let snipButtonHoverAnimationDuration = "))
+        XCTAssertTrue(theme.contains("private let snipButtonPressAnimationDuration = "))
+        XCTAssertTrue(theme.contains("private let snipButtonGlowFollowResponse = "))
+        XCTAssertTrue(theme.contains("private let snipButtonGlowDampingFraction = "))
+        XCTAssertTrue(theme.contains(".interactiveSpring("))
+        XCTAssertTrue(theme.contains("response: snipButtonGlowFollowResponse"))
+        XCTAssertTrue(theme.contains("dampingFraction: snipButtonGlowDampingFraction"))
+        XCTAssertTrue(theme.contains(".animation(.easeOut(duration: snipButtonPressAnimationDuration), value: configuration.isPressed)"))
+        XCTAssertTrue(theme.contains(".animation(.easeOut(duration: snipButtonHoverAnimationDuration), value: isHovered)"))
+        XCTAssertFalse(theme.contains(".spring(response: 0.68, dampingFraction: 0.72, blendDuration: 0.18)"))
+        XCTAssertFalse(theme.contains(".animation(.easeInOut(duration: 0.32), value: isHovered)"))
         XCTAssertTrue(theme.contains("configuration.isPressed ? 0.34 : 0.30"))
         XCTAssertTrue(theme.contains("endRadius: max(proxy.size.width, proxy.size.height) * 1.55"))
         XCTAssertTrue(theme.contains("radius: isHovered && isEnabled ? 16 : 0"))
         XCTAssertTrue(theme.contains("return isHovered ? AppTheme.snipAccent.opacity(0.42) : Color.white.opacity(0.12)"))
-        XCTAssertTrue(theme.contains(".animation(.easeInOut(duration: 0.32), value: isHovered)"))
         XCTAssertTrue(theme.contains(".cursorUpdate"))
         XCTAssertTrue(theme.contains("NSCursor.pointingHand.set()"))
         XCTAssertFalse(contentView.contains(".buttonStyle(GraphitePrimaryButtonStyle())"))
         XCTAssertFalse(snipButtonSource.contains(".buttonStyle(GraphiteSecondaryButtonStyle())"))
+    }
+
+    func testSnipButtonTrackingUsesEntryLocationBeforeHoverState() throws {
+        let theme = try sourceFile("Sources/SnapTexApp/Support/AppTheme.swift")
+        let trackingView = try viewSource(named: "LiquidSnipTrackingArea", in: theme)
+
+        guard let enteredRange = trackingView.range(of: "override func mouseEntered") else {
+            XCTFail("Snip tracking area should handle mouseEntered")
+            return
+        }
+        guard let movedRange = trackingView.range(of: "override func mouseMoved") else {
+            XCTFail("Snip tracking area should handle mouseMoved")
+            return
+        }
+
+        let enteredSource = trackingView[enteredRange.lowerBound..<movedRange.lowerBound]
+        guard let locationUpdate = enteredSource.range(of: "updateLocation(from: event)")?.lowerBound,
+              let hoverUpdate = enteredSource.range(of: "isHovered?.wrappedValue = true")?.lowerBound else {
+            XCTFail("mouseEntered should update location and hover state")
+            return
+        }
+
+        XCTAssertLessThan(locationUpdate, hoverUpdate)
     }
 
     func testConfidenceIsNotDisplayedWithoutModelProvidedConfidence() throws {
@@ -655,17 +687,24 @@ final class AppLayoutMetricsTests: XCTestCase {
         let exitedSource = trackingView[exitedRange.lowerBound...]
 
         XCTAssertTrue(trackingView.contains("private var lastInBoundsHoverLocation = CGPoint(x: 0.5, y: 0.5)"))
-        XCTAssertTrue(trackingView.contains("withAnimation(.easeOut(duration: historyCardHoverLocationSettleDuration))"))
-        XCTAssertTrue(enteredSource.contains("updateLocation(from: event, animated: true)"))
-        XCTAssertTrue(exitedSource.contains("updateLocation(from: event, keepsLastInBoundsWhenOutside: true, animated: true)"))
+        let movedSource = trackingView[movedRange.lowerBound..<exitedRange.lowerBound]
+
+        XCTAssertTrue(historyView.contains("private let historyCardHoverLocationFollowDuration = "))
+        XCTAssertTrue(historyView.contains("private let historyCardHoverLocationDampingFraction = "))
+        XCTAssertTrue(historyView.contains("private func historyCardHoverLocationAnimation(response: Double) -> Animation"))
+        XCTAssertTrue(trackingView.contains("withAnimation(animation)"))
+        XCTAssertTrue(enteredSource.contains("animation: historyCardHoverLocationAnimation(response: historyCardHoverLocationSettleDuration)"))
+        XCTAssertTrue(movedSource.contains("animation: historyCardHoverLocationAnimation(response: historyCardHoverLocationFollowDuration)"))
+        XCTAssertTrue(exitedSource.contains("keepsLastInBoundsWhenOutside: true"))
+        XCTAssertTrue(exitedSource.contains("animation: historyCardHoverLocationAnimation(response: historyCardHoverLocationSettleDuration)"))
         XCTAssertFalse(exitedSource.contains("updateLocation(from: event)\n            isHovered?.wrappedValue = false"))
 
-        guard let enteredLocationUpdate = enteredSource.range(of: "updateLocation(from: event")?.lowerBound,
+        guard let enteredLocationUpdate = enteredSource.range(of: "updateLocation(")?.lowerBound,
               let enteredHoverUpdate = enteredSource.range(of: "isHovered?.wrappedValue = true")?.lowerBound else {
             XCTFail("mouseEntered should update pointer and hover state")
             return
         }
-        guard let exitedLocationUpdate = exitedSource.range(of: "updateLocation(from: event")?.lowerBound,
+        guard let exitedLocationUpdate = exitedSource.range(of: "updateLocation(")?.lowerBound,
               let exitedHoverUpdate = exitedSource.range(of: "isHovered?.wrappedValue = false")?.lowerBound else {
             XCTFail("mouseExited should update pointer and hover state")
             return

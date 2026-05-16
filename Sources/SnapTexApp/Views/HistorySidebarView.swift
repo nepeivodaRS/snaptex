@@ -913,7 +913,10 @@ private let historyCardHoverEnterDuration = 0.28
 private let historyCardHoverExitDuration = 0.46
 private let historyCardHoverDampingFraction = 0.88
 private let historyCardHoverBlendDuration = 0.06
+private let historyCardHoverLocationFollowDuration = 0.18
 private let historyCardHoverLocationSettleDuration = 0.14
+private let historyCardHoverLocationDampingFraction = 0.82
+private let historyCardHoverLocationBlendDuration = 0.04
 private let historyCardBackgroundOpacity = 0.035
 private let historyCardHoverBackgroundOpacityBoost = 0.020
 private let selectedIdleHoverEnterDuration = 1.32
@@ -928,6 +931,14 @@ private func historyCardHoverAnimation(isActive: Bool) -> Animation {
         response: isActive ? historyCardHoverEnterDuration : historyCardHoverExitDuration,
         dampingFraction: historyCardHoverDampingFraction,
         blendDuration: historyCardHoverBlendDuration
+    )
+}
+
+private func historyCardHoverLocationAnimation(response: Double) -> Animation {
+    .interactiveSpring(
+        response: response,
+        dampingFraction: historyCardHoverLocationDampingFraction,
+        blendDuration: historyCardHoverLocationBlendDuration
     )
 }
 
@@ -1314,27 +1325,37 @@ private struct HistoryCardHoverTrackingArea: NSViewRepresentable {
         }
 
         override func mouseEntered(with event: NSEvent) {
-            updateLocation(from: event, animated: true)
+            updateLocation(
+                from: event,
+                animation: historyCardHoverLocationAnimation(response: historyCardHoverLocationSettleDuration)
+            )
             isHovered?.wrappedValue = true
         }
 
         override func mouseMoved(with event: NSEvent) {
-            updateLocation(from: event)
+            updateLocation(
+                from: event,
+                animation: historyCardHoverLocationAnimation(response: historyCardHoverLocationFollowDuration)
+            )
         }
 
         override func mouseExited(with event: NSEvent) {
-            updateLocation(from: event, keepsLastInBoundsWhenOutside: true, animated: true)
+            updateLocation(
+                from: event,
+                keepsLastInBoundsWhenOutside: true,
+                animation: historyCardHoverLocationAnimation(response: historyCardHoverLocationSettleDuration)
+            )
             isHovered?.wrappedValue = false
         }
 
         private func updateLocation(
             from event: NSEvent,
             keepsLastInBoundsWhenOutside: Bool = false,
-            animated: Bool = false
+            animation: Animation? = nil
         ) {
             let point = convert(event.locationInWindow, from: nil)
             guard bounds.width > 0, bounds.height > 0 else {
-                setHoverLocation(CGPoint(x: 0.5, y: 0.5), animated: animated)
+                setHoverLocation(CGPoint(x: 0.5, y: 0.5), animation: animation)
                 return
             }
 
@@ -1349,17 +1370,17 @@ private struct HistoryCardHoverTrackingArea: NSViewRepresentable {
 
             setHoverLocation(
                 keepsLastInBoundsWhenOutside && !isInBounds ? lastInBoundsHoverLocation : nextLocation,
-                animated: animated
+                animation: animation
             )
         }
 
-        private func setHoverLocation(_ location: CGPoint, animated: Bool) {
-            guard animated else {
+        private func setHoverLocation(_ location: CGPoint, animation: Animation?) {
+            guard let animation else {
                 hoverLocation?.wrappedValue = location
                 return
             }
 
-            withAnimation(.easeOut(duration: historyCardHoverLocationSettleDuration)) {
+            withAnimation(animation) {
                 hoverLocation?.wrappedValue = location
             }
         }

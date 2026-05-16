@@ -20,6 +20,22 @@ struct ScreenshotService {
             try captureInteractiveSync()
         }.value
     }
+
+    static func validatedCaptureOutput(
+        at outputURL: URL,
+        fileManager: FileManager = .default
+    ) throws -> URL? {
+        guard fileManager.fileExists(atPath: outputURL.path) else {
+            return nil
+        }
+
+        let attributes = try fileManager.attributesOfItem(atPath: outputURL.path)
+        guard let size = attributes[.size] as? NSNumber, size.intValue > 0 else {
+            throw ScreenshotServiceError.missingOutputFile
+        }
+
+        return outputURL
+    }
 }
 
 private func captureInteractiveSync() throws -> URL? {
@@ -42,10 +58,5 @@ private func captureInteractiveSync() throws -> URL? {
         return nil
     }
 
-    let attributes = try FileManager.default.attributesOfItem(atPath: outputURL.path)
-    guard let size = attributes[.size] as? NSNumber, size.intValue > 0 else {
-        throw ScreenshotServiceError.missingOutputFile
-    }
-
-    return outputURL
+    return try ScreenshotService.validatedCaptureOutput(at: outputURL)
 }

@@ -34,6 +34,12 @@ struct LiquidSnipButtonStyle: ButtonStyle {
     }
 }
 
+private let snipButtonHoverAnimationDuration = 0.14
+private let snipButtonPressAnimationDuration = 0.055
+private let snipButtonGlowFollowResponse = 0.18
+private let snipButtonGlowDampingFraction = 0.86
+private let snipButtonGlowBlendDuration = 0.04
+
 struct GraphitePanelModifier: ViewModifier {
     var background: Color = AppTheme.panelBackground
     var border: Color = AppTheme.border
@@ -148,8 +154,8 @@ private struct LiquidSnipButtonBody: View {
                 }
                 updateGlowLocation(mouseLocation)
             }
-            .animation(.easeOut(duration: 0.08), value: configuration.isPressed)
-            .animation(.easeInOut(duration: 0.32), value: isHovered)
+            .animation(.easeOut(duration: snipButtonPressAnimationDuration), value: configuration.isPressed)
+            .animation(.easeOut(duration: snipButtonHoverAnimationDuration), value: isHovered)
     }
 
     private var foreground: Color {
@@ -193,7 +199,13 @@ private struct LiquidSnipButtonBody: View {
     }
 
     private func updateGlowLocation(_ location: CGPoint) {
-        withAnimation(.spring(response: 0.68, dampingFraction: 0.72, blendDuration: 0.18)) {
+        withAnimation(
+            .interactiveSpring(
+                response: snipButtonGlowFollowResponse,
+                dampingFraction: snipButtonGlowDampingFraction,
+                blendDuration: snipButtonGlowBlendDuration
+            )
+        ) {
             glowLocation = location
         }
     }
@@ -245,8 +257,8 @@ private struct LiquidSnipTrackingArea: NSViewRepresentable {
 
         override func mouseEntered(with event: NSEvent) {
             isInside = true
-            isHovered?.wrappedValue = true
             updateLocation(from: event)
+            isHovered?.wrappedValue = true
             updateCursor()
         }
 
