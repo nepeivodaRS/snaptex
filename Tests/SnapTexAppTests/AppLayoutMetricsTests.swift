@@ -130,6 +130,20 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source[titleRange.upperBound...].prefix(140).contains(".lineLimit(1)"))
     }
 
+    func testRenderedPreviewHeaderStacksModelBelowTitleAndCentersActions() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
+
+        XCTAssertTrue(source.contains("private let renderedOutputActionHeight: CGFloat = 30"))
+        XCTAssertTrue(source.contains("private var renderedOutputHeader: some View"))
+        XCTAssertTrue(source.contains("private var renderedOutputTitleBlock: some View"))
+        XCTAssertTrue(source.contains("VStack(alignment: .leading, spacing: 2)"))
+        XCTAssertTrue(source.contains("renderedOutputTitle.frame(height: renderedOutputActionHeight, alignment: .center)"))
+        XCTAssertTrue(source.contains("Text(\"Model: \\(currentResultModel.title)\")"))
+        XCTAssertTrue(source.contains("renderedOutputActions.frame(height: renderedOutputActionHeight, alignment: .center)"))
+        XCTAssertTrue(source.contains("ExportFormulaMenu(model: model).frame(height: renderedOutputActionHeight, alignment: .center)"))
+        XCTAssertTrue(source.contains("previewZoomControls.frame(height: renderedOutputActionHeight, alignment: .center)"))
+    }
+
     func testExportMenuUsesHoverAnimation() throws {
         let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
 
@@ -141,6 +155,7 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("isPressed: $isExportPressed"))
         XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.12), value: isExportHovered)"))
         XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.08), value: isExportPressed)"))
+        XCTAssertFalse(source.contains(".offset(y: isHovered && isEnabled && !isPressed ? -2 : 0)"))
     }
 
     func testRecognitionControlsUseIndividualSegmentHoverAndSlidingSelection() throws {
@@ -300,6 +315,28 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyFolder.contains("case folder"))
         XCTAssertTrue(historyView.contains("folder.badge.plus"))
         XCTAssertFalse(historyView.contains(".menuStyle(.borderlessButton)"))
+    }
+
+    func testNewFoldersBeginRenamingAutomatically() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+
+        XCTAssertTrue(historyView.contains("@State private var renamingFolderID: HistoryFolder.ID?"))
+        XCTAssertTrue(historyView.contains("@Binding var renamingFolderID: HistoryFolder.ID?"))
+        XCTAssertTrue(historyView.contains("renamingFolderID = folder.id"))
+        XCTAssertTrue(historyView.contains("beginRenameIfRequested()"))
+        XCTAssertTrue(historyView.contains(".onChange(of: renamingFolderID)"))
+    }
+
+    func testSettingsTextSectionUsesSnapTitleAndLabelFontControls() throws {
+        let settingsView = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+
+        XCTAssertTrue(settingsView.contains("SettingsRow(\"Snap title\")"))
+        XCTAssertTrue(settingsView.contains("SettingsRow(\"Labels\")"))
+        XCTAssertTrue(settingsView.contains("labelFontSizeBinding"))
+        XCTAssertFalse(settingsView.contains("SettingsRow(\"History title\")"))
+        XCTAssertTrue(historyView.contains("labelFontSize: model.settings.labelFontSize"))
+        XCTAssertTrue(historyView.contains("private var labelFont: Font"))
     }
 
     func testHistoryRowsUseLeftFolderBadgeForFolderAssignment() throws {

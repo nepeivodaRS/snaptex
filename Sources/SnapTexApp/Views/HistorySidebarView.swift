@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 struct HistorySidebarView: View {
     @ObservedObject var model: AppModel
     @State private var folderDropTarget: FolderDropTarget?
+    @State private var renamingFolderID: HistoryFolder.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -12,7 +13,8 @@ struct HistorySidebarView: View {
 
             HistoryScopePicker(
                 model: model,
-                folderDropTarget: $folderDropTarget
+                folderDropTarget: $folderDropTarget,
+                renamingFolderID: $renamingFolderID
             )
                 .padding(.horizontal, 8)
                 .padding(.vertical, 8)
@@ -43,6 +45,7 @@ struct HistorySidebarView: View {
                                 moveToFolder: { model.moveHistoryEntry(entry, to: $0) },
                                 moveToNewFolder: {
                                     let folder = model.createHistoryFolder()
+                                    renamingFolderID = folder.id
                                     model.moveHistoryEntry(entry, to: folder.id)
                                     model.reopenHistoryEntry(entry)
                                 },
@@ -89,7 +92,10 @@ struct HistorySidebarView: View {
             HistoryActionButton(
                 systemName: "folder.badge.plus",
                 help: "New folder",
-                action: { model.createHistoryFolder() }
+                action: {
+                    let folder = model.createHistoryFolder()
+                    renamingFolderID = folder.id
+                }
             )
         }
         .padding(.leading, 14)
@@ -239,6 +245,7 @@ private struct HistorySortMenuBridge: NSViewRepresentable {
 private struct HistoryScopePicker: View {
     @ObservedObject var model: AppModel
     @Binding var folderDropTarget: FolderDropTarget?
+    @Binding var renamingFolderID: HistoryFolder.ID?
     @State private var draggedFolderID: HistoryFolder.ID?
     @State private var folderRowFrames: [HistoryFolder.ID: CGRect] = [:]
     @AppStorage("historyFoldersExpanded") private var isFoldersExpanded = true
@@ -250,11 +257,13 @@ private struct HistoryScopePicker: View {
                 systemName: "clock.arrow.circlepath",
                 count: model.historyCount(for: .all),
                 isSelected: model.selectedHistoryScope == .all,
+                labelFontSize: model.settings.labelFontSize,
                 action: { model.selectHistoryScope(.all) }
             )
 
             if !model.historyFolders.isEmpty {
                 HistoryFoldersHeader(
+                    labelFontSize: model.settings.labelFontSize,
                     isExpanded: $isFoldersExpanded,
                     collapseFolders: { model.selectHistoryScope(.all) }
                 )
@@ -265,12 +274,14 @@ private struct HistoryScopePicker: View {
                             folder: folder,
                             count: model.historyCount(for: .folder(folder.id)),
                             isSelected: model.selectedHistoryScope == .folder(folder.id),
+                            labelFontSize: model.settings.labelFontSize,
                             select: { model.selectHistoryScope(.folder(folder.id)) },
                             rename: { model.renameHistoryFolder(folder, name: $0) },
                             updateColor: { model.updateHistoryFolderColor(folder, color: $0) },
                             isDragging: draggedFolderID == folder.id,
                             isAnyFolderDragging: draggedFolderID != nil,
                             folderDropTarget: $folderDropTarget,
+                            renamingFolderID: $renamingFolderID,
                             folderDragChanged: { updateFolderDrag(sourceID: folder.id, y: $0) },
                             folderDragEnded: { finishFolderDrag(sourceID: folder.id, y: $0) },
                             moveDroppedEntries: { model.moveHistoryEntries(withIDs: $0, to: folder.id) },
@@ -292,6 +303,11 @@ private struct HistoryScopePicker: View {
         .coordinateSpace(name: historyFoldersCoordinateSpace)
         .onPreferenceChange(FolderRowFramePreferenceKey.self) { frames in
             folderRowFrames = frames
+        }
+        .onChange(of: renamingFolderID) { requestedID in
+            if requestedID != nil {
+                isFoldersExpanded = true
+            }
         }
     }
 
@@ -338,14 +354,14 @@ private struct HistoryScopePicker: View {
 }
 
 private struct HistoryFoldersHeader: View {
+    let labelFontSize: Int
     @Binding var isExpanded: Bool
     let collapseFolders: () -> Void
 
     var body: some View {
         HStack(spacing: 6) {
             Text("Folders")
-                .font(.caption)
-                .fontWeight(.semibold)
+                .font(labelFont)
                 .foregroundStyle(AppTheme.quietText)
 
             Spacer(minLength: 8)
@@ -365,6 +381,10 @@ private struct HistoryFoldersHeader: View {
         .padding(.trailing, 2)
         .padding(.top, 5)
     }
+
+    private var labelFont: Font {
+        .system(size: CGFloat(labelFontSize), weight: .semibold)
+    }
 }
 
 private struct HistoryScopeRow: View {
@@ -372,6 +392,7 @@ private struct HistoryScopeRow: View {
     let systemName: String
     let count: Int
     let isSelected: Bool
+    let labelFontSize: Int
     var iconTint: Color = .secondary
     let action: () -> Void
 
@@ -384,8 +405,7 @@ private struct HistoryScopeRow: View {
                     .frame(width: 16)
 
                 Text(title)
-                    .font(.caption)
-                    .fontWeight(.semibold)
+                    .font(labelFont)
                     .lineLimit(1)
 
                 Spacer(minLength: 8)
@@ -410,18 +430,24 @@ private struct HistoryScopeRow: View {
                 .strokeBorder(isSelected ? AppTheme.selectedBorder : Color.clear, lineWidth: 1)
         }
     }
+
+    private var labelFont: Font {
+        .system(size: CGFloat(labelFontSize), weight: .semibold)
+    }
 }
 
 private struct HistoryFolderScopeRow: View {
     let folder: HistoryFolder
     let count: Int
     let isSelected: Bool
+    let labelFontSize: Int
     let select: () -> Void
     let rename: (String) -> Void
     let updateColor: (HistoryFolderColor) -> Void
     let isDragging: Bool
     let isAnyFolderDragging: Bool
     @Binding var folderDropTarget: FolderDropTarget?
+    @Binding var renamingFolderID: HistoryFolder.ID?
     let folderDragChanged: (CGFloat) -> Void
     let folderDragEnded: (CGFloat) -> Void
     let moveDroppedEntries: ([OCRHistoryEntry.ID]) -> Void
@@ -434,36 +460,42 @@ private struct HistoryFolderScopeRow: View {
     @FocusState private var nameFieldFocused: Bool
 
     var body: some View {
-        if isRenaming {
-            renameRow
-        } else {
-            folderRow
-            .simultaneousGesture(TapGesture(count: 2).onEnded { beginRename() })
-            .simultaneousGesture(folderReorderGesture)
-            .onDrop(of: [UTType.text], isTargeted: $isSnapDropTarget) { providers in
-                providers.loadHistoryEntryIDs(moveDroppedEntries)
-                return true
+        Group {
+            if isRenaming {
+                renameRow
+            } else {
+                folderRow
+                    .simultaneousGesture(TapGesture(count: 2).onEnded { beginRename() })
+                    .simultaneousGesture(folderReorderGesture)
+                    .onDrop(of: [UTType.text], isTargeted: $isSnapDropTarget) { providers in
+                        providers.loadHistoryEntryIDs(moveDroppedEntries)
+                        return true
+                    }
+                    .overlay {
+                        FolderContextMenuBridge(
+                            selectedColor: folder.color,
+                            rename: beginRename,
+                            updateColor: updateColor,
+                            deleteKeepingSnaps: deleteKeepingSnaps,
+                            deleteWithSnaps: deleteWithSnaps
+                        )
+                    }
+                    .overlay(alignment: .top) {
+                        if currentDropPlacement == .before {
+                            FolderInsertionIndicator()
+                        }
+                    }
+                    .overlay(alignment: .bottom) {
+                        if currentDropPlacement == .after {
+                            FolderInsertionIndicator()
+                        }
+                    }
+                    .opacity(isDragging ? 0.55 : 1)
             }
-            .overlay {
-                FolderContextMenuBridge(
-                    selectedColor: folder.color,
-                    rename: beginRename,
-                    updateColor: updateColor,
-                    deleteKeepingSnaps: deleteKeepingSnaps,
-                    deleteWithSnaps: deleteWithSnaps
-                )
-            }
-            .overlay(alignment: .top) {
-                if currentDropPlacement == .before {
-                    FolderInsertionIndicator()
-                }
-            }
-            .overlay(alignment: .bottom) {
-                if currentDropPlacement == .after {
-                    FolderInsertionIndicator()
-                }
-            }
-            .opacity(isDragging ? 0.55 : 1)
+        }
+        .onAppear(perform: beginRenameIfRequested)
+        .onChange(of: renamingFolderID) { _ in
+            beginRenameIfRequested()
         }
     }
 
@@ -492,8 +524,7 @@ private struct HistoryFolderScopeRow: View {
                 .frame(width: 16)
 
             Text(folder.name)
-                .font(.caption)
-                .fontWeight(.semibold)
+                .font(labelFont)
                 .lineLimit(1)
 
             Spacer(minLength: 8)
@@ -532,7 +563,7 @@ private struct HistoryFolderScopeRow: View {
 
             TextField("Folder name", text: $draftName)
                 .textFieldStyle(.roundedBorder)
-                .font(.caption)
+                .font(labelFont)
                 .focused($nameFieldFocused)
                 .onAppear {
                     nameFieldFocused = true
@@ -546,6 +577,17 @@ private struct HistoryFolderScopeRow: View {
         .padding(.vertical, 4)
     }
 
+    private var labelFont: Font {
+        .system(size: CGFloat(labelFontSize), weight: .semibold)
+    }
+
+    private func beginRenameIfRequested() {
+        guard renamingFolderID == folder.id, !isRenaming else {
+            return
+        }
+        beginRename()
+    }
+
     private func beginRename() {
         draftName = folder.name
         withAnimation(.easeOut(duration: 0.12)) {
@@ -555,14 +597,22 @@ private struct HistoryFolderScopeRow: View {
 
     private func saveRename() {
         rename(draftName)
+        clearRequestedRename()
         withAnimation(.easeOut(duration: 0.12)) {
             isRenaming = false
         }
     }
 
     private func cancelRename() {
+        clearRequestedRename()
         withAnimation(.easeOut(duration: 0.12)) {
             isRenaming = false
+        }
+    }
+
+    private func clearRequestedRename() {
+        if renamingFolderID == folder.id {
+            renamingFolderID = nil
         }
     }
 }

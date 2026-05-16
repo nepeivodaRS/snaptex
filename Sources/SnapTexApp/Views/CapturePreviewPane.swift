@@ -2,6 +2,8 @@ import SwiftUI
 import SnapTexCore
 import UniformTypeIdentifiers
 
+private let renderedOutputActionHeight: CGFloat = 30
+
 struct CapturePreviewPane: View {
     @ObservedObject var model: AppModel
     @State private var isDropTargeted = false
@@ -14,29 +16,7 @@ struct CapturePreviewPane: View {
 
             captureSurface
 
-            HStack {
-                Text("Rendered Output")
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-
-                if let currentResultModel = model.currentResultModel {
-                    Text("Model: \(currentResultModel.title)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-
-                Spacer()
-
-                ExportFormulaMenu(model: model)
-
-                Rectangle()
-                    .fill(AppTheme.border)
-                    .frame(width: 1, height: 22)
-
-                previewZoomControls
-            }
+            renderedOutputHeader
 
             previewSurface
         }
@@ -143,6 +123,53 @@ struct CapturePreviewPane: View {
         .controlSize(.small)
         .foregroundStyle(.secondary)
     }
+
+    private var renderedOutputHeader: some View {
+        HStack(alignment: .center) {
+            renderedOutputTitleBlock
+
+            Spacer()
+
+            renderedOutputActions.frame(height: renderedOutputActionHeight, alignment: .center)
+        }
+        .frame(minHeight: renderedOutputActionHeight, alignment: .center)
+    }
+
+    @ViewBuilder
+    private var renderedOutputTitleBlock: some View {
+        if let currentResultModel = model.currentResultModel {
+            VStack(alignment: .leading, spacing: 2) {
+                renderedOutputTitle
+
+                Text("Model: \(currentResultModel.title)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        } else {
+            renderedOutputTitle.frame(height: renderedOutputActionHeight, alignment: .center)
+        }
+    }
+
+    private var renderedOutputTitle: some View {
+        Text("Rendered Output")
+            .font(.headline)
+            .foregroundStyle(.primary)
+            .lineLimit(1)
+    }
+
+    private var renderedOutputActions: some View {
+        HStack(alignment: .center, spacing: 8) {
+            ExportFormulaMenu(model: model).frame(height: renderedOutputActionHeight, alignment: .center)
+
+            Rectangle()
+                .fill(AppTheme.border)
+                .frame(width: 1, height: 22)
+
+            previewZoomControls.frame(height: renderedOutputActionHeight, alignment: .center)
+        }
+        .frame(height: renderedOutputActionHeight, alignment: .center)
+    }
 }
 
 private struct ExportFormulaMenu: View {
@@ -193,7 +220,6 @@ private struct ExportMenuLabel: View {
             }
             .shadow(color: AppTheme.primaryButtonBackground.opacity(isHovered && isEnabled ? 0.16 : 0), radius: 7, y: 1)
             .scaleEffect(isPressed ? 0.96 : isHovered && isEnabled ? 1.05 : 1)
-            .offset(y: isHovered && isEnabled && !isPressed ? -2 : 0)
             .contentShape(RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius))
             .animation(.easeOut(duration: 0.08), value: isPressed)
             .animation(.easeOut(duration: 0.12), value: isHovered)

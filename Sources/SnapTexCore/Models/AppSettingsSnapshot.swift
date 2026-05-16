@@ -11,6 +11,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
     public var autoCopyAfterRecognition: Bool
     public var historyLimit: Int
     public var historyTitleFontSize: Int
+    public var labelFontSize: Int
     public var latexEditorFontSize: Int
     public var latexEditorFontFamily: LaTeXEditorFontFamily
     public var logVerbosity: LogVerbosity
@@ -28,6 +29,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         autoCopyAfterRecognition: Bool,
         historyLimit: Int,
         historyTitleFontSize: Int,
+        labelFontSize: Int,
         latexEditorFontSize: Int,
         latexEditorFontFamily: LaTeXEditorFontFamily,
         logVerbosity: LogVerbosity,
@@ -44,6 +46,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         self.autoCopyAfterRecognition = autoCopyAfterRecognition
         self.historyLimit = historyLimit
         self.historyTitleFontSize = Self.clampedFontSize(historyTitleFontSize)
+        self.labelFontSize = Self.clampedFontSize(labelFontSize)
         self.latexEditorFontSize = Self.clampedFontSize(latexEditorFontSize)
         self.latexEditorFontFamily = latexEditorFontFamily
         self.logVerbosity = logVerbosity
@@ -62,6 +65,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         case autoCopyAfterRecognition
         case historyLimit
         case historyTitleFontSize
+        case labelFontSize
         case latexEditorFontSize
         case latexEditorFontFamily
         case logVerbosity
@@ -83,6 +87,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         autoCopyAfterRecognition = try container.decodeIfPresent(Bool.self, forKey: .autoCopyAfterRecognition) ?? defaults.autoCopyAfterRecognition
         historyLimit = max(4, try container.decodeIfPresent(Int.self, forKey: .historyLimit) ?? defaults.historyLimit)
         historyTitleFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .historyTitleFontSize) ?? defaults.historyTitleFontSize)
+        labelFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .labelFontSize) ?? defaults.labelFontSize)
         latexEditorFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .latexEditorFontSize) ?? defaults.latexEditorFontSize)
         latexEditorFontFamily = try container.decodeIfPresent(LaTeXEditorFontFamily.self, forKey: .latexEditorFontFamily) ?? defaults.latexEditorFontFamily
         logVerbosity = try container.decodeIfPresent(LogVerbosity.self, forKey: .logVerbosity) ?? defaults.logVerbosity
@@ -105,6 +110,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         try container.encode(autoCopyAfterRecognition, forKey: .autoCopyAfterRecognition)
         try container.encode(max(4, historyLimit), forKey: .historyLimit)
         try container.encode(Self.clampedFontSize(historyTitleFontSize), forKey: .historyTitleFontSize)
+        try container.encode(Self.clampedFontSize(labelFontSize), forKey: .labelFontSize)
         try container.encode(Self.clampedFontSize(latexEditorFontSize), forKey: .latexEditorFontSize)
         try container.encode(latexEditorFontFamily, forKey: .latexEditorFontFamily)
         try container.encode(logVerbosity, forKey: .logVerbosity)
@@ -123,6 +129,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         autoCopyAfterRecognition: false,
         historyLimit: 40,
         historyTitleFontSize: 13,
+        labelFontSize: 12,
         latexEditorFontSize: 14,
         latexEditorFontFamily: .monospaced,
         logVerbosity: .normal,

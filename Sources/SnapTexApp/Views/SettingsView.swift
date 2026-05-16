@@ -96,8 +96,14 @@ struct SettingsView: View {
 
     private var textSection: some View {
         SettingsSection("Text") {
-            SettingsRow("History title") {
+            SettingsRow("Snap title") {
                 pointSizeField(value: historyTitleFontSizeBinding)
+            }
+
+            Divider()
+
+            SettingsRow("Labels") {
+                pointSizeField(value: labelFontSizeBinding)
             }
 
             Divider()
@@ -166,6 +172,13 @@ struct SettingsView: View {
         Binding(
             get: { model.settings.historyTitleFontSize },
             set: { model.settings.historyTitleFontSize = AppSettingsSnapshot.clampedFontSize($0) }
+        )
+    }
+
+    private var labelFontSizeBinding: Binding<Int> {
+        Binding(
+            get: { model.settings.labelFontSize },
+            set: { model.settings.labelFontSize = AppSettingsSnapshot.clampedFontSize($0) }
         )
     }
 

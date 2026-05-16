@@ -20,6 +20,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(.defaultSnip, settings.snipShortcut)
         XCTAssertEqual("⌘⇧1", settings.snipShortcut.displayText)
         XCTAssertEqual(13, settings.historyTitleFontSize)
+        XCTAssertEqual(12, settings.labelFontSize)
         XCTAssertEqual(14, settings.latexEditorFontSize)
         XCTAssertEqual(.monospaced, settings.latexEditorFontFamily)
         XCTAssertEqual("SF Mono", settings.latexEditorFontFamily.title)
@@ -163,6 +164,7 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(OCRModelSelection(provider: .uniMERNet, size: .medium), settings.modelVariant)
         XCTAssertEqual(.defaultSnip, settings.snipShortcut)
         XCTAssertEqual(13, settings.historyTitleFontSize)
+        XCTAssertEqual(12, settings.labelFontSize)
         XCTAssertEqual(14, settings.latexEditorFontSize)
         XCTAssertEqual(.monospaced, settings.latexEditorFontFamily)
         XCTAssertEqual(.normal, settings.logVerbosity)
@@ -210,6 +212,16 @@ final class SettingsTests: XCTestCase {
         let decoded = try JSONDecoder().decode(AppSettingsSnapshot.self, from: data)
 
         XCTAssertEqual(.debug, decoded.logVerbosity)
+    }
+
+    func testSettingsPersistLabelFontSize() throws {
+        var settings = AppSettingsSnapshot.default
+        settings.labelFontSize = 18
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettingsSnapshot.self, from: data)
+
+        XCTAssertEqual(18, decoded.labelFontSize)
     }
 
     func testDecodedSettingsMigrateLegacyBaseVariantToLargeUniMERNetSelection() throws {
