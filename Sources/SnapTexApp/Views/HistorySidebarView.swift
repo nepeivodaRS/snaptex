@@ -620,6 +620,10 @@ private struct HistoryRow: View {
     @State private var isHovered = false
     @State private var hoverLocation = CGPoint(x: 0.5, y: 0.5)
     @State private var hoverEffectProgress = 0.0
+    @State private var selectedIdleStrength = 0.0
+    @State private var selectedFloatStrength = 0.0
+    @State private var selectedFloatProgress = Double.zero
+    @State private var isSelectedFloatAnimationRunning = false
     @FocusState private var titleFieldFocused: Bool
 
     var body: some View {
@@ -696,12 +700,15 @@ private struct HistoryRow: View {
         .modifier(HistoryDepthCardHoverEffect(
             progress: hoverEffectProgress,
             hoverLocation: hoverLocation,
+            selectedIdleStrength: selectedIdleStrength,
+            selectedFloatStrength: selectedFloatStrength,
+            selectedFloatProgress: selectedFloatProgress,
             cornerRadius: 7
         ))
         .shadow(
             color: Color.black.opacity(shadowOpacity),
-            radius: 5 + hoverEffectProgress,
-            y: 1 + hoverEffectProgress
+            radius: cardShadowRadius,
+            y: cardShadowY
         )
         .overlay {
             HistoryCardHoverTrackingArea(
@@ -709,7 +716,18 @@ private struct HistoryRow: View {
                 isHovered: $isHovered
             )
         }
-        .onChange(of: isHovered) { updateHoverEffect(isActive: $0) }
+        .onChange(of: isHovered) {
+            updateHoverEffect(isActive: isSelected || $0)
+            updateSelectedIdleAnimation()
+        }
+        .onChange(of: isSelected) {
+            updateHoverEffect(isActive: isHovered || $0)
+            updateSelectedIdleAnimation()
+        }
+        .onAppear {
+            updateHoverEffect(isActive: isSelected || isHovered)
+            updateSelectedIdleAnimation()
+        }
         .contextMenu {
             Button("Rename", action: beginRename)
             Button("Copy", action: copy)
@@ -789,22 +807,32 @@ private struct HistoryRow: View {
 
     private var shadowOpacity: Double {
         if isSelected {
-            return 0.10 - (hoverEffectProgress * 0.02)
+            return 0.10 - (hoverEffectProgress * 0.02) + selectedFloatStrength * 0.014
         }
         return 0.08 * hoverEffectProgress
+    }
+
+    private var cardShadowRadius: CGFloat {
+        5 + hoverEffectProgress + selectedFloatStrength * 0.9
+    }
+
+    private var cardShadowY: CGFloat {
+        1 + hoverEffectProgress + selectedFloatStrength * 0.55
     }
 
     private var thumbnail: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 5)
-                .fill(AppTheme.historySnipBackground)
+                .fill(AppTheme.controlBackground)
 
             if let image = entry.displayImage {
                 Image(nsImage: image)
                     .resizable()
                     .scaledToFit()
                     .padding(4)
-                    .opacity(0.72)
+                    .opacity(thumbnailImageOpacity)
+                    .brightness(thumbnailImageBrightness)
+                    .contrast(thumbnailImageContrast)
             } else {
                 Image(systemName: "function")
                     .font(.system(size: 18))
@@ -818,6 +846,10 @@ private struct HistoryRow: View {
             RoundedRectangle(cornerRadius: 5)
                 .strokeBorder(AppTheme.border, lineWidth: 1)
         }
+        .transaction { transaction in
+            transaction.animation = nil
+            transaction.disablesAnimations = true
+        }
         .contentShape(RoundedRectangle(cornerRadius: 5))
     }
 
@@ -825,6 +857,49 @@ private struct HistoryRow: View {
         withAnimation(.easeInOut(duration: isActive ? 0.28 : 1.15)) {
             hoverEffectProgress = isActive ? 1 : 0
         }
+    }
+
+    private var isSelectedIdle: Bool {
+        isSelected && !isHovered
+    }
+
+    private func updateSelectedIdleAnimation() {
+        withAnimation(.easeInOut(duration: 0.34)) {
+            selectedIdleStrength = isSelectedIdle ? 1 : 0
+            selectedFloatStrength = isSelected ? 1 : 0
+        }
+
+        guard isSelected else {
+            isSelectedFloatAnimationRunning = false
+            return
+        }
+
+        guard !isSelectedFloatAnimationRunning else {
+            return
+        }
+
+        isSelectedFloatAnimationRunning = true
+        DispatchQueue.main.async {
+            guard isSelected else {
+                return
+            }
+
+            withAnimation(.easeInOut(duration: 2.8).repeatForever(autoreverses: true)) {
+                selectedFloatProgress = selectedFloatProgress <= 0.5 ? 1 : Double.zero
+            }
+        }
+    }
+
+    private var thumbnailImageOpacity: Double {
+        return 1.0
+    }
+
+    private var thumbnailImageBrightness: Double {
+        return 0.0
+    }
+
+    private var thumbnailImageContrast: Double {
+        return 1.0
     }
 }
 
@@ -834,9 +909,14 @@ private struct HistoryThumbnailButtonStyle: ButtonStyle {
     }
 }
 
+private let protectedThumbnailOverlayHeight: CGFloat = 76
+
 private struct HistoryDepthCardHoverEffect: ViewModifier {
     let progress: Double
     let hoverLocation: CGPoint
+    let selectedIdleStrength: Double
+    let selectedFloatStrength: Double
+    let selectedFloatProgress: Double
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
@@ -851,66 +931,37 @@ private struct HistoryDepthCardHoverEffect: ViewModifier {
                 axis: (x: 0, y: -1, z: 0),
                 perspective: 0.68
             )
-            .scaleEffect(1 + progress * 0.006)
-            .offset(y: -progress)
+            .scaleEffect(1 + progress * 0.006 + selectedScaleBoost(for: selectedFloatProgress))
+            .offset(y: -progress + selectedLiftOffset + selectedFloatOffset(for: selectedFloatProgress))
             .overlay { foilOverlay }
             .overlay { depthBorder }
             .animation(.spring(response: 0.78, dampingFraction: 0.72, blendDuration: 0.18), value: hoverLocation)
     }
 
     private var foilOverlay: some View {
-        GeometryReader { _ in
+        GeometryReader { proxy in
             ZStack {
-                foilColorShift
-                foilBanding
+                HistoryFoilShader(
+                    hoverLocation: hoverLocation,
+                    cornerRadius: cornerRadius
+                )
+                .opacity(1 - selectedIdleStrength)
+
+                HistoryIdleFoilShader(cornerRadius: cornerRadius)
+                    .opacity(selectedIdleStrength)
             }
-            .blendMode(.screen)
-            .saturation(1.20)
-            .contrast(1.10)
-            .brightness(-0.030)
             .opacity(progress)
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .mask(alignment: .top) {
+                VStack(spacing: 0) {
+                    Rectangle()
+                        .frame(height: max(proxy.size.height - protectedThumbnailOverlayHeight, 0))
+
+                    Spacer(minLength: 0)
+                }
+            }
             .allowsHitTesting(false)
+            .animation(.easeInOut(duration: 0.34), value: selectedIdleStrength)
         }
-    }
-
-    private var foilColorShift: some View {
-        AngularGradient(
-            colors: [
-                Color(red: 0.38, green: 0.74, blue: 1.00).opacity(0.070),
-                Color(red: 0.58, green: 0.52, blue: 0.94).opacity(0.064),
-                Color(red: 0.36, green: 0.72, blue: 0.86).opacity(0.048),
-                Color(red: 0.76, green: 0.58, blue: 0.92).opacity(0.056),
-                Color(red: 0.94, green: 0.58, blue: 0.44).opacity(0.038),
-                Color(red: 0.88, green: 0.76, blue: 0.36).opacity(0.032),
-                Color(red: 0.38, green: 0.74, blue: 1.00).opacity(0.070)
-            ],
-            center: UnitPoint(
-                x: clampedUnit(0.24 + hoverLocation.x * 0.52),
-                y: clampedUnit(0.24 + hoverLocation.y * 0.52)
-            )
-        )
-    }
-
-    private var foilBanding: some View {
-        LinearGradient(
-            colors: [
-                Color(red: 0.38, green: 0.74, blue: 1.00).opacity(0.038),
-                Color(red: 0.58, green: 0.52, blue: 0.94).opacity(0.060),
-                Color(red: 0.36, green: 0.72, blue: 0.86).opacity(0.046),
-                Color(red: 0.76, green: 0.58, blue: 0.92).opacity(0.052),
-                Color(red: 0.94, green: 0.58, blue: 0.44).opacity(0.038),
-                Color(red: 0.88, green: 0.76, blue: 0.36).opacity(0.032)
-            ],
-            startPoint: UnitPoint(
-                x: hoverLocation.x - 0.86,
-                y: hoverLocation.y - 0.62
-            ),
-            endPoint: UnitPoint(
-                x: hoverLocation.x + 0.86,
-                y: hoverLocation.y + 0.66
-            )
-        )
     }
 
     private var depthBorder: some View {
@@ -957,6 +1008,96 @@ private struct HistoryDepthCardHoverEffect: ViewModifier {
     private var yTilt: Double {
         Double((hoverLocation.x - 0.5) * 3.8 * progress)
     }
+
+    private var selectedLiftOffset: Double {
+        return -selectedFloatStrength * 0.42
+    }
+
+    private func selectedFloatOffset(for floatProgress: Double) -> Double {
+        return -selectedFloatStrength * (0.16 + floatProgress * 0.36)
+    }
+
+    private func selectedScaleBoost(for floatProgress: Double) -> Double {
+        return selectedFloatStrength * (0.0015 + floatProgress * 0.0018)
+    }
+}
+
+private struct HistoryIdleFoilShader: View {
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+            HistoryFoilShader(
+                hoverLocation: idleHoverLocation(for: timeline.date),
+                cornerRadius: cornerRadius
+            )
+        }
+    }
+
+    private func idleHoverLocation(for date: Date) -> CGPoint {
+        let phase = (date.timeIntervalSinceReferenceDate / 5.8).truncatingRemainder(dividingBy: 1)
+        return CGPoint(
+            x: 0.5 + CGFloat(sin(phase * .pi * 2)) * 0.34,
+            y: 0.5 + CGFloat(cos(phase * .pi * 2)) * 0.14
+        )
+    }
+}
+
+private struct HistoryFoilShader: View {
+    let hoverLocation: CGPoint
+    let cornerRadius: CGFloat
+
+    var body: some View {
+        ZStack {
+            foilColorShift
+            foilBanding
+        }
+        .blendMode(.screen)
+        .saturation(1.20)
+        .contrast(1.10)
+        .brightness(-0.030)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    private var foilColorShift: some View {
+        AngularGradient(
+            colors: [
+                Color(red: 0.38, green: 0.74, blue: 1.00).opacity(0.070),
+                Color(red: 0.58, green: 0.52, blue: 0.94).opacity(0.064),
+                Color(red: 0.36, green: 0.72, blue: 0.86).opacity(0.048),
+                Color(red: 0.76, green: 0.58, blue: 0.92).opacity(0.056),
+                Color(red: 0.94, green: 0.58, blue: 0.44).opacity(0.038),
+                Color(red: 0.88, green: 0.76, blue: 0.36).opacity(0.032),
+                Color(red: 0.38, green: 0.74, blue: 1.00).opacity(0.070)
+            ],
+            center: UnitPoint(
+                x: clampedUnit(0.24 + hoverLocation.x * 0.52),
+                y: clampedUnit(0.24 + hoverLocation.y * 0.52)
+            )
+        )
+    }
+
+    private var foilBanding: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.38, green: 0.74, blue: 1.00).opacity(0.038),
+                Color(red: 0.58, green: 0.52, blue: 0.94).opacity(0.060),
+                Color(red: 0.36, green: 0.72, blue: 0.86).opacity(0.046),
+                Color(red: 0.76, green: 0.58, blue: 0.92).opacity(0.052),
+                Color(red: 0.94, green: 0.58, blue: 0.44).opacity(0.038),
+                Color(red: 0.88, green: 0.76, blue: 0.36).opacity(0.032)
+            ],
+            startPoint: UnitPoint(
+                x: hoverLocation.x - 0.86,
+                y: hoverLocation.y - 0.62
+            ),
+            endPoint: UnitPoint(
+                x: hoverLocation.x + 0.86,
+                y: hoverLocation.y + 0.66
+            )
+        )
+    }
+
 }
 
 private struct HistoryCardHoverTrackingArea: NSViewRepresentable {
@@ -1008,7 +1149,6 @@ private struct HistoryCardHoverTrackingArea: NSViewRepresentable {
 
         override func mouseExited(with event: NSEvent) {
             isHovered?.wrappedValue = false
-            hoverLocation?.wrappedValue = CGPoint(x: 0.5, y: 0.5)
         }
 
         private func updateLocation(from event: NSEvent) {
