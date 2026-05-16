@@ -436,8 +436,15 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertFalse(historyView.contains("HistorySnipBadge("))
         XCTAssertFalse(historyView.contains("private struct HistorySnipBadge"))
         XCTAssertFalse(historyView.contains("Image(systemName: \"crop\")"))
-        XCTAssertTrue(historyView.contains("AppTheme.historySnipBackground"))
         XCTAssertTrue(historyView.contains("AppTheme.historySelectedBackground"))
+        XCTAssertTrue(historyView.contains("private let historyCardBackgroundOpacity = 0.035"))
+        XCTAssertTrue(historyView.contains("private let historyCardHoverBackgroundOpacityBoost = 0.020"))
+        XCTAssertTrue(historyView.contains("HistoryRowPanel("))
+        XCTAssertTrue(historyView.contains("private struct HistoryRowPanel: AnimatableModifier"))
+        XCTAssertTrue(historyView.contains("var animatableData: Double"))
+        XCTAssertTrue(historyView.contains(".fill(Color.white.opacity(historyCardHoverBackgroundOpacityBoost))"))
+        XCTAssertTrue(historyView.contains(".opacity(isSelected ? 0 : hoverProgress)"))
+        XCTAssertFalse(historyView.contains("return isHovered ? AppTheme.historySnipHoverBackground : AppTheme.historySnipBackground"))
         XCTAssertTrue(historyView.contains("thumbnailImageOpacity: Double {\n        return 1.0"))
         XCTAssertTrue(historyView.contains("return 0.0"))
         XCTAssertTrue(historyView.contains("return 1.0"))
@@ -450,8 +457,13 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyView.contains("HistoryCardHoverTrackingArea"))
         XCTAssertTrue(historyView.contains("rotation3DEffect"))
         XCTAssertTrue(historyView.contains("hoverEffectProgress"))
-        XCTAssertTrue(historyView.contains("isActive ? 0.28 : 1.15"))
-        XCTAssertTrue(historyView.contains(".spring(response: 0.78, dampingFraction: 0.72, blendDuration: 0.18)"))
+        XCTAssertTrue(historyView.contains("isActive ? historyCardHoverEnterDuration : historyCardHoverExitDuration"))
+        XCTAssertTrue(historyView.contains("historyCardHoverAnimation(isActive: Bool)"))
+        XCTAssertTrue(historyView.contains(".spring("))
+        XCTAssertTrue(historyView.contains("response: isActive ? historyCardHoverEnterDuration : historyCardHoverExitDuration"))
+        XCTAssertFalse(historyView.contains(".easeInOut(duration: isActive ? historyCardHoverEnterDuration : historyCardHoverExitDuration)"))
+        XCTAssertTrue(historyView.contains("private struct HistoryDepthCardHoverEffect: AnimatableModifier"))
+        XCTAssertFalse(historyView.contains(".animation(.spring(response: 0.78, dampingFraction: 0.72, blendDuration: 0.18), value: hoverLocation)"))
         XCTAssertTrue(historyView.contains("private var foilColorShift: some View"))
         XCTAssertTrue(historyView.contains("private var foilBanding: some View"))
         XCTAssertTrue(historyView.contains(".saturation(1.20)"))
@@ -529,14 +541,26 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyRow.contains("selectedIdleStrength"))
         XCTAssertTrue(historyRow.contains("selectedFloatStrength"))
         XCTAssertTrue(historyRow.contains("selectedFloatProgress"))
+        XCTAssertTrue(historyRow.contains("selectedIdleStartDate"))
         XCTAssertTrue(historyRow.contains("selectedIdleStrength = isSelectedIdle ? 1 : 0"))
         XCTAssertTrue(historyRow.contains("selectedFloatStrength = isSelected ? 1 : 0"))
-        XCTAssertTrue(historyRow.contains(".easeInOut(duration: 2.8).repeatForever(autoreverses: true)"))
+        XCTAssertTrue(historyRow.contains("selectedIdleStartDate = Date()"))
+        XCTAssertTrue(historyRow.contains(".easeInOut(duration: selectedIdleHoverAnimationDuration).repeatForever(autoreverses: true)"))
         XCTAssertTrue(historyRow.contains("selectedIdleStrength: selectedIdleStrength"))
+        XCTAssertTrue(historyRow.contains("selectedIdleStartDate: selectedIdleStartDate"))
         XCTAssertTrue(historyRow.contains("cardShadowRadius"))
         XCTAssertTrue(historyRow.contains("cardShadowY"))
         XCTAssertTrue(historyRow.contains("updateSelectedIdleAnimation()"))
-        XCTAssertTrue(historyRow.contains(".easeInOut(duration: 0.34)"))
+        XCTAssertTrue(historyRow.contains("withAnimation(historyCardHoverAnimation(isActive: isActive))"))
+        XCTAssertTrue(historyRow.contains("let idleTransitionDuration = isSelectedIdle ? selectedIdleHoverEnterDuration : selectedIdleHoverExitDuration"))
+        XCTAssertTrue(historyRow.contains(".easeInOut(duration: idleTransitionDuration)"))
+        XCTAssertTrue(historyView.contains("private let historyCardHoverEnterDuration = "))
+        XCTAssertTrue(historyView.contains("private let historyCardHoverExitDuration = "))
+        XCTAssertTrue(historyView.contains("private let selectedIdleHoverEnterDuration = 1.32"))
+        XCTAssertTrue(historyView.contains("private let selectedIdleHoverExitDuration = "))
+        XCTAssertTrue(historyView.contains("private let selectedIdleHoverAnimationDuration = "))
+        XCTAssertTrue(historyView.contains("private let selectedIdleHoverHorizontalAmplitude: CGFloat = 0.36"))
+        XCTAssertTrue(historyView.contains("private let selectedIdleHoverVerticalAmplitude: CGFloat = 0.12"))
         XCTAssertTrue(historyRow.contains("thumbnailImageOpacity"))
         XCTAssertTrue(historyRow.contains(".brightness(thumbnailImageBrightness)"))
         XCTAssertTrue(historyRow.contains("private var thumbnailImageOpacity: Double"))
@@ -548,6 +572,7 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(thumbnailSource.contains("transaction.disablesAnimations = true"))
         XCTAssertTrue(thumbnailSource.contains(".fill(AppTheme.controlBackground)"))
         XCTAssertFalse(thumbnailSource.contains(".fill(AppTheme.historySnipBackground)"))
+        XCTAssertFalse(historyRow.contains("return isHovered ? AppTheme.historySnipHoverBackground : AppTheme.historySnipBackground"))
         XCTAssertFalse(historyRow.contains("thumbnailImageOpacity: Double {\n        return 0.94"))
         XCTAssertFalse(historyRow.contains("thumbnailImageOpacity: Double {\n        0.68 + hoverEffectProgress"))
         XCTAssertFalse(historyRow.contains("thumbnailImageBrightness: Double {\n        hoverEffectProgress"))
@@ -555,12 +580,32 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyView.contains("private let protectedThumbnailOverlayHeight: CGFloat = 76"))
         XCTAssertTrue(historyDepthCardHoverEffect.contains(".mask(alignment: .top)"))
         XCTAssertTrue(historyDepthCardHoverEffect.contains(".frame(height: max(proxy.size.height - protectedThumbnailOverlayHeight, 0))"))
-        XCTAssertTrue(historyView.contains("private struct HistoryIdleFoilShader: View"))
         XCTAssertTrue(historyView.contains("private struct HistoryFoilShader: View"))
-        XCTAssertTrue(historyView.contains("TimelineView(.animation(minimumInterval: 1.0 / 30.0))"))
-        XCTAssertTrue(historyView.contains("idleHoverLocation(for date: Date)"))
-        XCTAssertTrue(historyView.contains("sin(phase * .pi * 2)"))
-        XCTAssertTrue(historyView.contains("cos(phase * .pi * 2)"))
+        XCTAssertTrue(historyDepthCardHoverEffect.contains("TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !usesAnimatedClock))"))
+        XCTAssertTrue(historyDepthCardHoverEffect.contains("let effectiveHoverLocation = effectiveHoverLocation(for: timeline.date)"))
+        XCTAssertTrue(historyDepthCardHoverEffect.contains(".degrees(xTilt(for: effectiveHoverLocation))"))
+        XCTAssertTrue(historyDepthCardHoverEffect.contains(".degrees(yTilt(for: effectiveHoverLocation))"))
+        XCTAssertTrue(historyDepthCardHoverEffect.contains(".overlay { foilOverlay(for: effectiveHoverLocation) }"))
+        XCTAssertTrue(historyDepthCardHoverEffect.contains(".overlay { depthBorder(for: effectiveHoverLocation) }"))
+        XCTAssertTrue(historyView.contains("private struct HistoryDepthCardAnimationValues: VectorArithmetic"))
+        XCTAssertTrue(historyDepthCardHoverEffect.contains("var hoverX: Double"))
+        XCTAssertTrue(historyDepthCardHoverEffect.contains("var hoverY: Double"))
+        XCTAssertTrue(historyDepthCardHoverEffect.contains("var animatableData: HistoryDepthCardAnimationValues"))
+        XCTAssertTrue(historyView.contains("hoverLocation: effectiveHoverLocation"))
+        XCTAssertTrue(historyView.contains("private func effectiveHoverLocation(for date: Date) -> CGPoint"))
+        XCTAssertTrue(historyView.contains("let idleHoverLocation = selectedIdleHoverLocation(for: date)"))
+        XCTAssertTrue(historyView.contains("let idleStrength = CGFloat(selectedIdleStrength)"))
+        XCTAssertTrue(historyView.contains("x: hoverLocation.x + (idleHoverLocation.x - hoverLocation.x) * idleStrength"))
+        XCTAssertTrue(historyView.contains("y: hoverLocation.y + (idleHoverLocation.y - hoverLocation.y) * idleStrength"))
+        XCTAssertTrue(historyView.contains("private func selectedIdleHoverLocation(for date: Date) -> CGPoint"))
+        XCTAssertTrue(historyView.contains("let elapsed = max(0, date.timeIntervalSince(selectedIdleStartDate) - selectedIdleHoverEnterDuration)"))
+        XCTAssertTrue(historyView.contains("let phase = (elapsed / selectedIdleHoverAnimationDuration).truncatingRemainder(dividingBy: 1)"))
+        XCTAssertTrue(historyView.contains("x: 0.5 + CGFloat(sin(phase * .pi * 2)) * selectedIdleHoverHorizontalAmplitude"))
+        XCTAssertTrue(historyView.contains("y: 0.5 + CGFloat(sin(phase * .pi * 4)) * selectedIdleHoverVerticalAmplitude"))
+        XCTAssertFalse(historyView.contains("selectedIdleHoverLocation(for: selectedFloatProgress)"))
+        XCTAssertFalse(historyView.contains("selectedIdleHoverLocation(for: selectedIdleHoverProgress)"))
+        XCTAssertFalse(historyView.contains("let normalizedProgress = CGFloat(floatProgress * 2 - 1)"))
+        XCTAssertFalse(historyView.contains("x: 0.5 + normalizedProgress * selectedIdleHoverHorizontalAmplitude"))
         XCTAssertTrue(historyView.contains("private func selectedFloatOffset(for floatProgress: Double) -> Double"))
         XCTAssertTrue(historyView.contains("private func selectedScaleBoost(for floatProgress: Double) -> Double"))
         XCTAssertTrue(historyView.contains(".scaleEffect(1 + progress * 0.006 + selectedScaleBoost(for: selectedFloatProgress))"))
@@ -568,19 +613,66 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyView.contains("return -selectedFloatStrength * 0.42"))
         XCTAssertTrue(historyView.contains("return -selectedFloatStrength * (0.16 + floatProgress * 0.36)"))
         XCTAssertTrue(historyView.contains("return selectedFloatStrength * (0.0015 + floatProgress * 0.0018)"))
+        XCTAssertFalse(historyView.contains("private struct HistoryIdleFoilShader: View"))
+        XCTAssertFalse(historyView.contains("selectedIdleFloatOffset"))
+        XCTAssertFalse(historyView.contains("return -selectedIdleStrength * floatProgress * 0.9"))
         XCTAssertFalse(historyRow.contains("TimelineView("))
+        XCTAssertFalse(historyRow.contains("selectedIdleHoverProgress"))
+        XCTAssertFalse(historyRow.contains("isSelectedIdleHoverAnimationRunning"))
+        XCTAssertFalse(historyRow.contains(".linear(duration: selectedIdleHoverAnimationDuration).repeatForever(autoreverses: false)"))
+        XCTAssertFalse(historyDepthCardHoverEffect.contains("if usesAnimatedClock"))
+        XCTAssertFalse(historyDepthCardHoverEffect.contains("} else {\n            cardBody(content, effectiveHoverLocation: hoverLocation)"))
         XCTAssertFalse(historyRow.contains("isSelectedIdle: isSelected && !isHovered"))
         XCTAssertFalse(historyRow.contains("selectedIdleTravelProgress"))
         XCTAssertFalse(historyRow.contains("selectedIdleBlend"))
         XCTAssertFalse(historyRow.contains("isSelectedIdleAnimationRunning"))
         XCTAssertFalse(historyRow.contains("selectedFloatStrength = isSelectedIdle ? 1 : 0"))
         XCTAssertFalse(historyRow.contains("selectedFloatProgress = 0"))
-        XCTAssertFalse(historyDepthCardHoverEffect.contains("TimelineView("))
         XCTAssertFalse(historyView.contains("selectedIdleFloatProgress = 0"))
         XCTAssertFalse(historyRow.contains("selectedIdleHoverLocation("))
         XCTAssertFalse(historyView.contains("private func selectedIdleFoilSweep"))
         XCTAssertFalse(historyView.contains("return -0.45 - selectedIdleFloatProgress * 1.10"))
-        XCTAssertFalse(historyView.contains("repeatForever(autoreverses: false)"))
+    }
+
+    func testHistoryCardHoverTrackingUpdatesPointerBeforeHoverStateChanges() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        let trackingView = try viewSource(named: "HistoryCardHoverTrackingArea", in: historyView)
+
+        guard let enteredRange = trackingView.range(of: "override func mouseEntered") else {
+            XCTFail("Tracking view should handle mouseEntered")
+            return
+        }
+        guard let movedRange = trackingView.range(of: "override func mouseMoved") else {
+            XCTFail("Tracking view should handle mouseMoved")
+            return
+        }
+        guard let exitedRange = trackingView.range(of: "override func mouseExited") else {
+            XCTFail("Tracking view should handle mouseExited")
+            return
+        }
+
+        let enteredSource = trackingView[enteredRange.lowerBound..<movedRange.lowerBound]
+        let exitedSource = trackingView[exitedRange.lowerBound...]
+
+        XCTAssertTrue(trackingView.contains("private var lastInBoundsHoverLocation = CGPoint(x: 0.5, y: 0.5)"))
+        XCTAssertTrue(trackingView.contains("withAnimation(.easeOut(duration: historyCardHoverLocationSettleDuration))"))
+        XCTAssertTrue(enteredSource.contains("updateLocation(from: event, animated: true)"))
+        XCTAssertTrue(exitedSource.contains("updateLocation(from: event, keepsLastInBoundsWhenOutside: true, animated: true)"))
+        XCTAssertFalse(exitedSource.contains("updateLocation(from: event)\n            isHovered?.wrappedValue = false"))
+
+        guard let enteredLocationUpdate = enteredSource.range(of: "updateLocation(from: event")?.lowerBound,
+              let enteredHoverUpdate = enteredSource.range(of: "isHovered?.wrappedValue = true")?.lowerBound else {
+            XCTFail("mouseEntered should update pointer and hover state")
+            return
+        }
+        guard let exitedLocationUpdate = exitedSource.range(of: "updateLocation(from: event")?.lowerBound,
+              let exitedHoverUpdate = exitedSource.range(of: "isHovered?.wrappedValue = false")?.lowerBound else {
+            XCTFail("mouseExited should update pointer and hover state")
+            return
+        }
+
+        XCTAssertLessThan(enteredLocationUpdate, enteredHoverUpdate)
+        XCTAssertLessThan(exitedLocationUpdate, exitedHoverUpdate)
     }
 
     func testFoldersCanBeCollapsedFromFoldersHeader() throws {
