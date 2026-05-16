@@ -8,7 +8,7 @@ struct OutputPane: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("LaTeX")
-                    .font(.headline)
+                    .font(paneTitleFont)
                 Spacer()
                 OutputCopyButton(model: model)
                 OutputFormatMenu(
@@ -30,7 +30,7 @@ struct OutputPane: View {
 
             VStack(alignment: .leading, spacing: 10) {
                 Text("OCR Alternatives")
-                    .font(.headline)
+                    .font(paneTitleFont)
 
                 if model.alternatives.isEmpty {
                     RoundedRectangle(cornerRadius: 6)
@@ -48,7 +48,10 @@ struct OutputPane: View {
                 } else {
                     VStack(spacing: 8) {
                         ForEach(model.alternatives) { alternative in
-                            AlternativeRow(alternative: alternative) {
+                            AlternativeRow(
+                                alternative: alternative,
+                                metadataFontSize: model.settings.metadataFontSize
+                            ) {
                                 model.applyAlternative(alternative)
                             }
                             .disabled(!model.canApplyAlternatives)
@@ -68,6 +71,10 @@ struct OutputPane: View {
             get: { model.currentOutputFormat },
             set: { model.setCurrentOutputFormat($0) }
         )
+    }
+
+    private var paneTitleFont: Font {
+        .system(size: CGFloat(model.settings.paneTitleFontSize), weight: .semibold)
     }
 }
 
@@ -137,16 +144,17 @@ private extension LaTeXEditorFontFamily {
 
 private struct AlternativeRow: View {
     let alternative: LaTeXAlternative
+    let metadataFontSize: Int
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(alternative.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: CGFloat(metadataFontSize), weight: .semibold))
 
                 Text(alternative.latex)
-                    .font(.system(.caption, design: .monospaced))
+                    .font(.system(size: CGFloat(metadataFontSize), design: .monospaced))
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }

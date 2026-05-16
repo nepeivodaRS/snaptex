@@ -25,7 +25,9 @@ struct SnapTexApp: App {
                     .frame(width: 0, height: 0)
                 )
                 .onAppear {
-                    appDelegate.configure(model: model)
+                    appDelegate.configure(model: model, openMainWindow: {
+                        openMainWindow()
+                    })
                 }
         }
         .commands {
@@ -93,9 +95,11 @@ struct SnapTexApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let hotKeyController = GlobalHotKeyController()
+    private let snipHotKeyController = GlobalHotKeyController()
+    private let openAppHotKeyController = GlobalHotKeyController(hotKeyID: 2)
     private var cancellables = Set<AnyCancellable>()
     private weak var model: AppModel?
+    private var openMainWindowAction: (() -> Void)?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
@@ -123,14 +127,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return true
     }
 
-    func configure(model: AppModel) {
+    func configure(model: AppModel, openMainWindow: @escaping () -> Void) {
+        openMainWindowAction = openMainWindow
         guard self.model !== model else {
             return
         }
 
         self.model = model
-        hotKeyController.action = { [weak model] in
+        snipHotKeyController.action = { [weak model] in
             model?.snip()
+        }
+        openAppHotKeyController.action = { [weak self] in
+            self?.openMainWindowAction?()
         }
 
         cancellables.removeAll()
@@ -142,9 +150,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     guard let self else {
                         return
                     }
-                    let didRegister = self.hotKeyController.register(shortcut)
+                    let didRegister = self.snipHotKeyController.register(shortcut)
                     if !didRegister {
-                        model?.status = "Shortcut unavailable: \(shortcut.displayText)"
+                        model?.status = "Snip shortcut unavailable: \(shortcut.displayText)"
+                    }
+                }
+            }
+            .store(in: &cancellables)
+
+        model.$settings
+            .map(\.openAppShortcut)
+            .removeDuplicates()
+            .sink { [weak self, weak model] shortcut in
+                Task { @MainActor in
+                    guard let self else {
+                        return
+                    }
+                    let didRegister = self.openAppHotKeyController.register(shortcut)
+                    if !didRegister {
+                        model?.status = "Open app shortcut unavailable: \(shortcut.displayText)"
                     }
                 }
             }

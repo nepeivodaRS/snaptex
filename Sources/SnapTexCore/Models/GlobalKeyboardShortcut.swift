@@ -54,6 +54,11 @@ public struct GlobalKeyboardShortcut: Codable, Equatable, Sendable {
         modifiers: [.command, .shift]
     )
 
+    public static let defaultOpenApp = GlobalKeyboardShortcut(
+        keyCode: 31,
+        modifiers: [.command, .shift]
+    )
+
     public var displayText: String {
         "\(modifiers.displayText)\(Self.keyName(for: keyCode))"
     }

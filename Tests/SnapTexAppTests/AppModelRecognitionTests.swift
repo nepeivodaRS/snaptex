@@ -468,6 +468,40 @@ final class AppModelRecognitionTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: oldestImageURL.path))
     }
 
+    func testReducingLimitedHistoryLimitRemovesOldestSnapsImmediately() {
+        let model = AppModel()
+        model.settings.isHistoryLimitEnabled = true
+        model.settings.historyLimit = 40
+        model.history = [
+            makeHistoryEntry(title: "Newest", imageFingerprint: "image-0"),
+            makeHistoryEntry(title: "Recent", imageFingerprint: "image-1"),
+            makeHistoryEntry(title: "Middle", imageFingerprint: "image-2"),
+            makeHistoryEntry(title: "Older", imageFingerprint: "image-3"),
+            makeHistoryEntry(title: "Oldest", imageFingerprint: "image-4")
+        ]
+
+        model.settings.historyLimit = 4
+
+        XCTAssertEqual(["Newest", "Recent", "Middle", "Older"], model.history.map(\.title))
+    }
+
+    func testUnlimitedHistoryKeepsSnapsBeyondNumericLimit() {
+        let model = AppModel()
+        model.settings.isHistoryLimitEnabled = false
+        model.settings.historyLimit = 4
+
+        for index in 0..<6 {
+            model.insertPendingHistoryEntry(
+                image: nil,
+                imageFingerprint: "image-\(index)",
+                mode: .balanced,
+                model: .small
+            )
+        }
+
+        XCTAssertEqual(6, model.history.count)
+    }
+
     func testSelectingMissingModelPromptsForDownload() throws {
         let root = try makeTemporaryDirectory()
         let model = AppModel()
@@ -494,5 +528,21 @@ final class AppModelRecognitionTests: XCTestCase {
             .appendingPathExtension("png")
         try Data("image".utf8).write(to: url)
         return url
+    }
+
+    private func makeHistoryEntry(title: String, imageFingerprint: String) -> OCRHistoryEntry {
+        OCRHistoryEntry(
+            id: UUID(),
+            title: title,
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .small,
+            mode: .balanced,
+            image: nil,
+            imageFingerprint: imageFingerprint,
+            state: .recognized
+        )
     }
 }

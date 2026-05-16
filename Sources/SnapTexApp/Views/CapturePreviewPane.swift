@@ -11,7 +11,7 @@ struct CapturePreviewPane: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Capture")
-                .font(.headline)
+                .font(paneTitleFont)
                 .foregroundStyle(.primary)
 
             captureSurface
@@ -90,7 +90,7 @@ struct CapturePreviewPane: View {
             }
 
             Text("\(RenderedPreviewZoom.percent(for: model.renderedPreviewFontSize))%")
-                .font(.caption.monospacedDigit())
+                .font(.system(size: CGFloat(model.settings.metadataFontSize)).monospacedDigit())
                 .foregroundStyle(.secondary)
                 .frame(width: 42, alignment: .center)
 
@@ -142,7 +142,7 @@ struct CapturePreviewPane: View {
                 renderedOutputTitle
 
                 Text("Model: \(currentResultModel.title)")
-                    .font(.caption.weight(.semibold))
+                    .font(metadataFont.weight(.semibold))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -153,9 +153,17 @@ struct CapturePreviewPane: View {
 
     private var renderedOutputTitle: some View {
         Text("Rendered Output")
-            .font(.headline)
+            .font(paneTitleFont)
             .foregroundStyle(.primary)
             .lineLimit(1)
+    }
+
+    private var paneTitleFont: Font {
+        .system(size: CGFloat(model.settings.paneTitleFontSize), weight: .semibold)
+    }
+
+    private var metadataFont: Font {
+        .system(size: CGFloat(model.settings.metadataFontSize))
     }
 
     private var renderedOutputActions: some View {

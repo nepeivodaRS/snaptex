@@ -26,7 +26,11 @@ struct HistorySidebarView: View {
 
             if model.visibleHistory.isEmpty {
                 Spacer()
-                HistoryEmptyState(scope: model.selectedHistoryScope, hasAnyHistory: !model.history.isEmpty)
+                HistoryEmptyState(
+                    scope: model.selectedHistoryScope,
+                    hasAnyHistory: !model.history.isEmpty,
+                    metadataFontSize: model.settings.metadataFontSize
+                )
                 Spacer()
             } else {
                 ScrollViewReader { proxy in
@@ -36,6 +40,7 @@ struct HistorySidebarView: View {
                                 entry: entry,
                                 isSelected: entry.id == model.selectedHistoryID,
                                 titleFontSize: model.settings.historyTitleFontSize,
+                                metadataFontSize: model.settings.metadataFontSize,
                                 folderBadgeColor: model.historyFolderColor(for: entry.folderID),
                                 folders: model.historyFolders,
                                 copy: { model.copyHistoryEntry(entry) },
@@ -83,7 +88,7 @@ struct HistorySidebarView: View {
     private var header: some View {
         HStack(spacing: 8) {
             Text("History")
-                .font(.headline)
+                .font(.system(size: CGFloat(model.settings.paneTitleFontSize), weight: .semibold))
 
             Spacer()
 
@@ -258,6 +263,7 @@ private struct HistoryScopePicker: View {
                 count: model.historyCount(for: .all),
                 isSelected: model.selectedHistoryScope == .all,
                 labelFontSize: model.settings.labelFontSize,
+                metadataFontSize: model.settings.metadataFontSize,
                 action: { model.selectHistoryScope(.all) }
             )
 
@@ -275,6 +281,7 @@ private struct HistoryScopePicker: View {
                             count: model.historyCount(for: .folder(folder.id)),
                             isSelected: model.selectedHistoryScope == .folder(folder.id),
                             labelFontSize: model.settings.labelFontSize,
+                            metadataFontSize: model.settings.metadataFontSize,
                             select: { model.selectHistoryScope(.folder(folder.id)) },
                             rename: { model.renameHistoryFolder(folder, name: $0) },
                             updateColor: { model.updateHistoryFolderColor(folder, color: $0) },
@@ -393,6 +400,7 @@ private struct HistoryScopeRow: View {
     let count: Int
     let isSelected: Bool
     let labelFontSize: Int
+    let metadataFontSize: Int
     var iconTint: Color = .secondary
     let action: () -> Void
 
@@ -411,7 +419,7 @@ private struct HistoryScopeRow: View {
                 Spacer(minLength: 8)
 
                 Text("\(count)")
-                    .font(.caption2)
+                    .font(metadataFont)
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -434,6 +442,10 @@ private struct HistoryScopeRow: View {
     private var labelFont: Font {
         .system(size: CGFloat(labelFontSize), weight: .semibold)
     }
+
+    private var metadataFont: Font {
+        .system(size: CGFloat(metadataFontSize))
+    }
 }
 
 private struct HistoryFolderScopeRow: View {
@@ -441,6 +453,7 @@ private struct HistoryFolderScopeRow: View {
     let count: Int
     let isSelected: Bool
     let labelFontSize: Int
+    let metadataFontSize: Int
     let select: () -> Void
     let rename: (String) -> Void
     let updateColor: (HistoryFolderColor) -> Void
@@ -530,7 +543,7 @@ private struct HistoryFolderScopeRow: View {
             Spacer(minLength: 8)
 
             Text("\(count)")
-                .font(.caption2)
+                .font(metadataFont)
                 .fontWeight(.semibold)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
@@ -579,6 +592,10 @@ private struct HistoryFolderScopeRow: View {
 
     private var labelFont: Font {
         .system(size: CGFloat(labelFontSize), weight: .semibold)
+    }
+
+    private var metadataFont: Font {
+        .system(size: CGFloat(metadataFontSize))
     }
 
     private func beginRenameIfRequested() {
@@ -649,6 +666,7 @@ private struct FolderInsertionIndicator: View {
 private struct HistoryEmptyState: View {
     let scope: HistoryScope
     let hasAnyHistory: Bool
+    let metadataFontSize: Int
 
     var body: some View {
         VStack(spacing: 8) {
@@ -657,7 +675,7 @@ private struct HistoryEmptyState: View {
                 .foregroundStyle(.tertiary)
 
             Text(message)
-                .font(.caption)
+                .font(.system(size: CGFloat(metadataFontSize)))
                 .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
@@ -679,6 +697,7 @@ private struct HistoryRow: View {
     let entry: OCRHistoryEntry
     let isSelected: Bool
     let titleFontSize: Int
+    let metadataFontSize: Int
     let folderBadgeColor: HistoryFolderColor?
     let folders: [HistoryFolder]
     let copy: () -> Void
@@ -698,7 +717,7 @@ private struct HistoryRow: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 6) {
                 Text(entry.timeLabel)
-                    .font(.caption)
+                    .font(metadataFont)
                     .foregroundStyle(.secondary)
                     .frame(height: historyRowControlSize, alignment: .center)
 
@@ -713,7 +732,7 @@ private struct HistoryRow: View {
                 if isRenaming {
                     TextField("Name", text: $draftTitle)
                         .textFieldStyle(.roundedBorder)
-                        .font(.caption)
+                        .font(metadataFont)
                         .frame(height: historyRowControlSize)
                         .focused($titleFieldFocused)
                         .onAppear {
@@ -740,7 +759,12 @@ private struct HistoryRow: View {
                     .simultaneousGesture(TapGesture(count: 2).onEnded { beginRename() })
 
                     HStack(spacing: 4) {
-                        HistoryTextActionButton(title: "Copy", help: "Copy", action: copy)
+                        HistoryTextActionButton(
+                            title: "Copy",
+                            help: "Copy",
+                            fontSize: metadataFontSize,
+                            action: copy
+                        )
                         HistoryActionButton(systemName: "trash", help: "Delete", tint: .red, action: delete)
                     }
                 }
@@ -816,6 +840,10 @@ private struct HistoryRow: View {
         withAnimation(.easeOut(duration: 0.12)) {
             isRenaming = false
         }
+    }
+
+    private var metadataFont: Font {
+        .system(size: CGFloat(metadataFontSize))
     }
 
     private var thumbnail: some View {
@@ -1114,6 +1142,7 @@ private struct HistoryActionButton: View {
 private struct HistoryTextActionButton: View {
     let title: String
     let help: String
+    let fontSize: Int
     var tint: Color = .accentColor
     let action: () -> Void
 
@@ -1122,8 +1151,7 @@ private struct HistoryTextActionButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.caption)
-                .fontWeight(.semibold)
+                .font(.system(size: CGFloat(fontSize), weight: .semibold))
                 .lineLimit(1)
                 .padding(.horizontal, 8)
                 .frame(height: historyRowControlSize)

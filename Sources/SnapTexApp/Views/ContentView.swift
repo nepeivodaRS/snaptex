@@ -128,6 +128,7 @@ private struct ToolbarActionStrip: View {
             .disabled(!model.canCopy)
             .help("Copy visible LaTeX")
         }
+        .font(.system(size: CGFloat(model.settings.toolbarFontSize)))
         .fixedSize(horizontal: true, vertical: false)
     }
 }
@@ -141,7 +142,7 @@ private struct RecognitionControlGroup: View {
             HStack(spacing: 6) {
                 if showsLabels {
                     Text("Model")
-                        .fontWeight(.semibold)
+                        .font(.system(size: CGFloat(model.settings.toolbarFontSize), weight: .semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .frame(width: AppLayoutMetrics.toolbarModelLabelWidth, alignment: .leading)
@@ -151,6 +152,7 @@ private struct RecognitionControlGroup: View {
                     selection: providerSelection,
                     options: OCRModelProvider.allCases,
                     width: showsLabels ? 190 : 164,
+                    fontSize: model.settings.toolbarFontSize,
                     title: \.title
                 )
                 .help("Choose which OCR model family to use")
@@ -159,7 +161,7 @@ private struct RecognitionControlGroup: View {
             HStack(spacing: 6) {
                 if showsLabels {
                     Text("Size")
-                        .fontWeight(.semibold)
+                        .font(.system(size: CGFloat(model.settings.toolbarFontSize), weight: .semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .frame(width: 32, alignment: .leading)
@@ -169,6 +171,7 @@ private struct RecognitionControlGroup: View {
                     selection: sizeSelection,
                     options: OCRModelSize.allCases,
                     width: showsLabels ? 104 : 94,
+                    fontSize: model.settings.toolbarFontSize,
                     title: \.title
                 )
                 .help("Choose OCR model size")
@@ -177,7 +180,7 @@ private struct RecognitionControlGroup: View {
             HStack(spacing: 6) {
                 if showsLabels {
                     Text("Passes")
-                        .fontWeight(.semibold)
+                        .font(.system(size: CGFloat(model.settings.toolbarFontSize), weight: .semibold))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .frame(width: AppLayoutMetrics.toolbarPassesLabelWidth, alignment: .leading)
@@ -187,6 +190,7 @@ private struct RecognitionControlGroup: View {
                     selection: $model.settings.recognitionMode,
                     options: RecognitionMode.allCases,
                     width: showsLabels ? 120 : 104,
+                    fontSize: model.settings.toolbarFontSize,
                     title: \.title
                 )
                 .help("Choose how many OCR passes to run")
@@ -219,6 +223,7 @@ private struct SmoothRecognitionSegmentedControl<Option: Identifiable & Equatabl
     @Binding var selection: Option
     let options: [Option]
     let width: CGFloat
+    let fontSize: Int
     let title: (Option) -> String
 
     @Environment(\.isEnabled) private var isEnabled
@@ -243,7 +248,7 @@ private struct SmoothRecognitionSegmentedControl<Option: Identifiable & Equatabl
                         }
                     } label: {
                         Text(title(option))
-                            .font(.caption.weight(.semibold))
+                            .font(.system(size: CGFloat(fontSize), weight: .semibold))
                             .foregroundStyle(foreground(for: option))
                             .lineLimit(1)
                             .frame(width: segmentWidth, height: 28)
@@ -319,6 +324,7 @@ private struct ToolbarStatusView: View {
 
                 if !compact {
                     Text("Downloading \(activeDownload.variant.title) model")
+                        .font(.system(size: CGFloat(model.settings.toolbarFontSize)))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -331,6 +337,7 @@ private struct ToolbarStatusView: View {
                 }
 
                 Text(model.toolbarStatusText)
+                    .font(.system(size: CGFloat(model.settings.toolbarFontSize)))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)

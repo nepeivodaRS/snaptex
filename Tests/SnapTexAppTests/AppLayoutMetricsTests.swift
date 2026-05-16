@@ -330,13 +330,74 @@ final class AppLayoutMetricsTests: XCTestCase {
     func testSettingsTextSectionUsesSnapTitleAndLabelFontControls() throws {
         let settingsView = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
         let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        let contentView = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
+        let captureView = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
+        let outputView = try sourceFile("Sources/SnapTexApp/Views/OutputPane.swift")
 
-        XCTAssertTrue(settingsView.contains("SettingsRow(\"Snap title\")"))
-        XCTAssertTrue(settingsView.contains("SettingsRow(\"Labels\")"))
+        XCTAssertTrue(settingsView.contains("SettingsFontRow("))
+        XCTAssertTrue(settingsView.contains("title: \"History snap titles\""))
+        XCTAssertTrue(settingsView.contains("description: \"Snap names in the History list\""))
+        XCTAssertTrue(settingsView.contains("title: \"Sidebar labels\""))
+        XCTAssertTrue(settingsView.contains("description: \"All Snaps, Folders, and folder names\""))
+        XCTAssertTrue(settingsView.contains("title: \"Pane headings\""))
+        XCTAssertTrue(settingsView.contains("description: \"History, Capture, Rendered Output, LaTeX\""))
+        XCTAssertTrue(settingsView.contains("title: \"Toolbar controls\""))
+        XCTAssertTrue(settingsView.contains("description: \"Top bar buttons, model controls, and status\""))
+        XCTAssertTrue(settingsView.contains("title: \"Metadata text\""))
+        XCTAssertTrue(settingsView.contains("description: \"Timestamps, counts, model info, and alternatives\""))
+        XCTAssertTrue(settingsView.contains("title: \"LaTeX editor\""))
         XCTAssertTrue(settingsView.contains("labelFontSizeBinding"))
+        XCTAssertTrue(settingsView.contains("paneTitleFontSizeBinding"))
+        XCTAssertTrue(settingsView.contains("toolbarFontSizeBinding"))
+        XCTAssertTrue(settingsView.contains("metadataFontSizeBinding"))
         XCTAssertFalse(settingsView.contains("SettingsRow(\"History title\")"))
+        XCTAssertFalse(settingsView.contains("SettingsRow(\"Snap title\")"))
         XCTAssertTrue(historyView.contains("labelFontSize: model.settings.labelFontSize"))
         XCTAssertTrue(historyView.contains("private var labelFont: Font"))
+        XCTAssertTrue(historyView.contains("model.settings.paneTitleFontSize"))
+        XCTAssertTrue(historyView.contains("metadataFontSize: model.settings.metadataFontSize"))
+        XCTAssertTrue(contentView.contains("model.settings.toolbarFontSize"))
+        XCTAssertTrue(captureView.contains("model.settings.paneTitleFontSize"))
+        XCTAssertTrue(captureView.contains("model.settings.metadataFontSize"))
+        XCTAssertTrue(outputView.contains("model.settings.paneTitleFontSize"))
+        XCTAssertTrue(outputView.contains("metadataFontSize: model.settings.metadataFontSize"))
+    }
+
+    func testSettingsFontRowsSupportTypingAndStepperAdjustment() throws {
+        let settingsView = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+
+        XCTAssertTrue(settingsView.contains("TextField(\"\", value: $value, formatter: Self.fontSizeFormatter)"))
+        XCTAssertTrue(settingsView.contains("Stepper(\"\", value: $value, in: 10...28, step: 1)"))
+        XCTAssertTrue(settingsView.contains(".labelsHidden()"))
+        XCTAssertTrue(settingsView.contains(".help(\"Increase or decrease by 1 pt\")"))
+    }
+
+    func testSettingsHistoryLimitSupportsUnlimitedAndStepperAdjustment() throws {
+        let settingsView = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+
+        XCTAssertTrue(settingsView.contains("SettingsHistoryLimitRow("))
+        XCTAssertTrue(settingsView.contains("Toggle(\"Unlimited\", isOn: $isUnlimited)"))
+        XCTAssertTrue(settingsView.contains("private var limitControls: some View"))
+        XCTAssertTrue(settingsView.contains("Text(\"Limited deletes oldest snaps beyond the limit. Unlimited keeps every snap.\")"))
+        XCTAssertTrue(settingsView.contains("TextField(\"\", value: $limit, formatter: Self.historyLimitFormatter)"))
+        XCTAssertTrue(settingsView.contains(".frame(width: 54)"))
+        XCTAssertTrue(settingsView.contains("Stepper(\"\", value: $limit, in: 4...200, step: 1)"))
+        XCTAssertTrue(settingsView.contains("Divider().frame(height: 18)"))
+        XCTAssertTrue(settingsView.contains(".fixedSize(horizontal: true, vertical: false)"))
+        XCTAssertTrue(settingsView.contains(".help(\"Increase or decrease by 1 item\")"))
+        XCTAssertTrue(settingsView.contains(".disabled(isUnlimited)"))
+    }
+
+    func testSettingsExposeOpenAppShortcut() throws {
+        let settingsView = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+        let appSource = try sourceFile("Sources/SnapTexApp/App/SnapTexApp.swift")
+
+        XCTAssertTrue(settingsView.contains("SettingsRow(\"Open app\")"))
+        XCTAssertTrue(settingsView.contains("ShortcutRecorderView(shortcut: $model.settings.openAppShortcut)"))
+        XCTAssertTrue(appSource.contains("openAppHotKeyController"))
+        XCTAssertTrue(appSource.contains("openMainWindow: @escaping () -> Void"))
+        XCTAssertTrue(appSource.contains(".map(\\.openAppShortcut)"))
+        XCTAssertTrue(appSource.contains("GlobalHotKeyController(hotKeyID: 2)"))
     }
 
     func testHistoryRowsUseLeftFolderBadgeForFolderAssignment() throws {
@@ -381,7 +442,9 @@ final class AppLayoutMetricsTests: XCTestCase {
     func testHistoryRowActionsKeepControlsOnOneCenterLine() throws {
         let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
 
-        XCTAssertTrue(historyView.contains("HistoryTextActionButton(title: \"Copy\""))
+        XCTAssertTrue(historyView.contains("HistoryTextActionButton("))
+        XCTAssertTrue(historyView.contains("title: \"Copy\""))
+        XCTAssertTrue(historyView.contains("fontSize: metadataFontSize"))
         XCTAssertTrue(historyView.contains("private let historyRowControlSize: CGFloat = 24"))
         XCTAssertTrue(historyView.contains(".frame(width: historyRowControlSize, height: historyRowControlSize)"))
         XCTAssertFalse(historyView.contains("help: \"Copy again\""))

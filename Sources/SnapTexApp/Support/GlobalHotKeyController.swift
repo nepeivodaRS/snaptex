@@ -5,8 +5,13 @@ import SnapTexCore
 final class GlobalHotKeyController {
     var action: (() -> Void)?
 
+    private let hotKeyID: UInt32
     private var hotKeyRef: EventHotKeyRef?
     private var eventHandlerRef: EventHandlerRef?
+
+    init(hotKeyID: UInt32 = 1) {
+        self.hotKeyID = hotKeyID
+    }
 
     deinit {
         unregister()
@@ -24,7 +29,7 @@ final class GlobalHotKeyController {
 
         installEventHandlerIfNeeded()
 
-        let hotKeyID = EventHotKeyID(signature: Self.signature, id: Self.hotKeyID)
+        let hotKeyID = EventHotKeyID(signature: Self.signature, id: self.hotKeyID)
         let status = RegisterEventHotKey(
             UInt32(shortcut.keyCode),
             shortcut.modifiers.carbonFlags,
@@ -86,7 +91,7 @@ final class GlobalHotKeyController {
 
         guard status == noErr,
               hotKeyID.signature == Self.signature,
-              hotKeyID.id == Self.hotKeyID else {
+              hotKeyID.id == self.hotKeyID else {
             return OSStatus(eventNotHandledErr)
         }
 
@@ -97,7 +102,6 @@ final class GlobalHotKeyController {
     }
 
     private static let signature: OSType = 0x534E_5058
-    private static let hotKeyID: UInt32 = 1
 }
 
 extension KeyboardShortcutModifiers {

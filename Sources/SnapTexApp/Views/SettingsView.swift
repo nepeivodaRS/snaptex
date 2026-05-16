@@ -16,7 +16,7 @@ struct SettingsView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .frame(minWidth: 300, idealWidth: 340, maxWidth: 380)
+            .frame(minWidth: 340, idealWidth: 390, maxWidth: 440)
 
             logsSection
         }
@@ -72,16 +72,10 @@ struct SettingsView: View {
 
             Divider()
 
-            SettingsRow("History limit") {
-                HStack(spacing: 8) {
-                    TextField("", value: historyLimitBinding, formatter: Self.historyLimitFormatter)
-                        .textFieldStyle(.roundedBorder)
-                        .multilineTextAlignment(.trailing)
-                        .frame(width: 76)
-                    Text("items")
-                        .foregroundStyle(.secondary)
-                }
-            }
+            SettingsHistoryLimitRow(
+                isUnlimited: unlimitedHistoryBinding,
+                limit: limitedHistoryLimitBinding
+            )
         }
     }
 
@@ -91,26 +85,63 @@ struct SettingsView: View {
                 ShortcutRecorderView(shortcut: $model.settings.snipShortcut)
                     .frame(width: 150, height: 28)
             }
+
+            Divider()
+
+            SettingsRow("Open app") {
+                ShortcutRecorderView(shortcut: $model.settings.openAppShortcut)
+                    .frame(width: 150, height: 28)
+            }
         }
     }
 
     private var textSection: some View {
         SettingsSection("Text") {
-            SettingsRow("Snap title") {
-                pointSizeField(value: historyTitleFontSizeBinding)
-            }
+            SettingsFontRow(
+                title: "History snap titles",
+                description: "Snap names in the History list",
+                value: historyTitleFontSizeBinding
+            )
 
             Divider()
 
-            SettingsRow("Labels") {
-                pointSizeField(value: labelFontSizeBinding)
-            }
+            SettingsFontRow(
+                title: "Sidebar labels",
+                description: "All Snaps, Folders, and folder names",
+                value: labelFontSizeBinding
+            )
 
             Divider()
 
-            SettingsRow("LaTeX size") {
-                pointSizeField(value: latexEditorFontSizeBinding)
-            }
+            SettingsFontRow(
+                title: "Pane headings",
+                description: "History, Capture, Rendered Output, LaTeX",
+                value: paneTitleFontSizeBinding
+            )
+
+            Divider()
+
+            SettingsFontRow(
+                title: "Toolbar controls",
+                description: "Top bar buttons, model controls, and status",
+                value: toolbarFontSizeBinding
+            )
+
+            Divider()
+
+            SettingsFontRow(
+                title: "Metadata text",
+                description: "Timestamps, counts, model info, and alternatives",
+                value: metadataFontSizeBinding
+            )
+
+            Divider()
+
+            SettingsFontRow(
+                title: "LaTeX editor",
+                description: "Recognized LaTeX text editor",
+                value: latexEditorFontSizeBinding
+            )
 
             Divider()
 
@@ -161,7 +192,14 @@ struct SettingsView: View {
         .graphitePanel(background: AppTheme.panelBackground)
     }
 
-    private var historyLimitBinding: Binding<Int> {
+    private var unlimitedHistoryBinding: Binding<Bool> {
+        Binding(
+            get: { !model.settings.isHistoryLimitEnabled },
+            set: { model.settings.isHistoryLimitEnabled = !$0 }
+        )
+    }
+
+    private var limitedHistoryLimitBinding: Binding<Int> {
         Binding(
             get: { model.settings.historyLimit },
             set: { model.settings.historyLimit = min(200, max(4, $0)) }
@@ -182,6 +220,27 @@ struct SettingsView: View {
         )
     }
 
+    private var paneTitleFontSizeBinding: Binding<Int> {
+        Binding(
+            get: { model.settings.paneTitleFontSize },
+            set: { model.settings.paneTitleFontSize = AppSettingsSnapshot.clampedFontSize($0) }
+        )
+    }
+
+    private var toolbarFontSizeBinding: Binding<Int> {
+        Binding(
+            get: { model.settings.toolbarFontSize },
+            set: { model.settings.toolbarFontSize = AppSettingsSnapshot.clampedFontSize($0) }
+        )
+    }
+
+    private var metadataFontSizeBinding: Binding<Int> {
+        Binding(
+            get: { model.settings.metadataFontSize },
+            set: { model.settings.metadataFontSize = AppSettingsSnapshot.clampedFontSize($0) }
+        )
+    }
+
     private var latexEditorFontSizeBinding: Binding<Int> {
         Binding(
             get: { model.settings.latexEditorFontSize },
@@ -189,32 +248,6 @@ struct SettingsView: View {
         )
     }
 
-    private func pointSizeField(value: Binding<Int>) -> some View {
-        HStack(spacing: 8) {
-            TextField("", value: value, formatter: Self.fontSizeFormatter)
-                .textFieldStyle(.roundedBorder)
-                .multilineTextAlignment(.trailing)
-                .frame(width: 76)
-            Text("pt")
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private static let historyLimitFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.allowsFloats = false
-        formatter.minimum = 4
-        formatter.maximum = 200
-        return formatter
-    }()
-
-    private static let fontSizeFormatter: NumberFormatter = {
-        let formatter = NumberFormatter()
-        formatter.allowsFloats = false
-        formatter.minimum = 10
-        formatter.maximum = 28
-        return formatter
-    }()
 }
 
 private struct ModelManagementRow: View {
@@ -351,4 +384,113 @@ private struct SettingsRow<Content: View>: View {
         }
         .frame(maxWidth: .infinity)
     }
+}
+
+private struct SettingsHistoryLimitRow: View {
+    @Binding var isUnlimited: Bool
+    @Binding var limit: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .center, spacing: 12) {
+                Text("History limit")
+                    .lineLimit(1)
+
+                Spacer(minLength: 12)
+
+                HStack(spacing: 10) {
+                    limitControls
+
+                    Divider().frame(height: 18)
+
+                    Toggle("Unlimited", isOn: $isUnlimited)
+                        .toggleStyle(.checkbox)
+                        .controlSize(.small)
+                }
+                .fixedSize(horizontal: true, vertical: false)
+            }
+
+            Text("Limited deletes oldest snaps beyond the limit. Unlimited keeps every snap.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var limitControls: some View {
+        HStack(spacing: 6) {
+            TextField("", value: $limit, formatter: Self.historyLimitFormatter)
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.trailing)
+                .controlSize(.small)
+                .frame(width: 54)
+
+            Text("items")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Stepper("", value: $limit, in: 4...200, step: 1)
+                .labelsHidden()
+                .controlSize(.small)
+                .help("Increase or decrease by 1 item")
+        }
+        .disabled(isUnlimited)
+        .opacity(isUnlimited ? 0.5 : 1)
+    }
+
+    private static let historyLimitFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.allowsFloats = false
+        formatter.minimum = 4
+        formatter.maximum = 200
+        return formatter
+    }()
+}
+
+private struct SettingsFontRow: View {
+    let title: String
+    let description: String
+    @Binding var value: Int
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .lineLimit(1)
+
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer(minLength: 12)
+
+            HStack(spacing: 8) {
+                TextField("", value: $value, formatter: Self.fontSizeFormatter)
+                    .textFieldStyle(.roundedBorder)
+                    .multilineTextAlignment(.trailing)
+                    .frame(width: 76)
+
+                Text("pt")
+                    .foregroundStyle(.secondary)
+
+                Stepper("", value: $value, in: 10...28, step: 1)
+                    .labelsHidden()
+                    .controlSize(.small)
+                    .help("Increase or decrease by 1 pt")
+            }
+            .frame(width: 138, alignment: .trailing)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private static let fontSizeFormatter: NumberFormatter = {
+        let formatter = NumberFormatter()
+        formatter.allowsFloats = false
+        formatter.minimum = 10
+        formatter.maximum = 28
+        return formatter
+    }()
 }

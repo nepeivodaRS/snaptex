@@ -19,6 +19,10 @@ final class AppModel: ObservableObject {
             if oldValue.outputFormat != settings.outputFormat, selectedHistoryID == nil {
                 applyCurrentOutputFormat(settings.outputFormat)
             }
+            if oldValue.isHistoryLimitEnabled != settings.isHistoryLimitEnabled ||
+                oldValue.historyLimit != settings.historyLimit {
+                trimHistoryToLimit()
+            }
         }
     }
     @Published var capturedImage: NSImage?
@@ -1282,11 +1286,25 @@ final class AppModel: ObservableObject {
     }
 
     private func trimHistoryToLimit() {
+        guard settings.isHistoryLimitEnabled else {
+            return
+        }
+
         let limit = max(4, settings.historyLimit)
         if history.count > limit {
             let removedEntries = Array(history.suffix(history.count - limit))
+            let removedSelectedEntry = selectedHistoryID.map { selectedID in
+                removedEntries.contains { $0.id == selectedID }
+            } ?? false
             history.removeLast(history.count - limit)
             removeOwnedImageFiles(for: removedEntries)
+            if removedSelectedEntry {
+                if let nextEntry = visibleHistory.first {
+                    reopenHistoryEntry(nextEntry)
+                } else {
+                    clearCurrentEntryDisplay()
+                }
+            }
         }
     }
 

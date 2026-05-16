@@ -19,8 +19,13 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(settings.validateRender)
         XCTAssertEqual(.defaultSnip, settings.snipShortcut)
         XCTAssertEqual("⌘⇧1", settings.snipShortcut.displayText)
+        XCTAssertEqual(.defaultOpenApp, settings.openAppShortcut)
+        XCTAssertEqual("⌘⇧O", settings.openAppShortcut.displayText)
         XCTAssertEqual(13, settings.historyTitleFontSize)
         XCTAssertEqual(12, settings.labelFontSize)
+        XCTAssertEqual(13, settings.paneTitleFontSize)
+        XCTAssertEqual(12, settings.toolbarFontSize)
+        XCTAssertEqual(11, settings.metadataFontSize)
         XCTAssertEqual(14, settings.latexEditorFontSize)
         XCTAssertEqual(.monospaced, settings.latexEditorFontFamily)
         XCTAssertEqual("SF Mono", settings.latexEditorFontFamily.title)
@@ -160,11 +165,16 @@ final class SettingsTests: XCTestCase {
 
         XCTAssertTrue(settings.validateRender)
         XCTAssertTrue(settings.autoCopyAfterRecognition)
+        XCTAssertTrue(settings.isHistoryLimitEnabled)
         XCTAssertEqual(32, settings.historyLimit)
         XCTAssertEqual(OCRModelSelection(provider: .uniMERNet, size: .medium), settings.modelVariant)
         XCTAssertEqual(.defaultSnip, settings.snipShortcut)
+        XCTAssertEqual(.defaultOpenApp, settings.openAppShortcut)
         XCTAssertEqual(13, settings.historyTitleFontSize)
         XCTAssertEqual(12, settings.labelFontSize)
+        XCTAssertEqual(13, settings.paneTitleFontSize)
+        XCTAssertEqual(12, settings.toolbarFontSize)
+        XCTAssertEqual(11, settings.metadataFontSize)
         XCTAssertEqual(14, settings.latexEditorFontSize)
         XCTAssertEqual(.monospaced, settings.latexEditorFontFamily)
         XCTAssertEqual(.normal, settings.logVerbosity)
@@ -217,11 +227,29 @@ final class SettingsTests: XCTestCase {
     func testSettingsPersistLabelFontSize() throws {
         var settings = AppSettingsSnapshot.default
         settings.labelFontSize = 18
+        settings.paneTitleFontSize = 17
+        settings.toolbarFontSize = 15
+        settings.metadataFontSize = 10
 
         let data = try JSONEncoder().encode(settings)
         let decoded = try JSONDecoder().decode(AppSettingsSnapshot.self, from: data)
 
         XCTAssertEqual(18, decoded.labelFontSize)
+        XCTAssertEqual(17, decoded.paneTitleFontSize)
+        XCTAssertEqual(15, decoded.toolbarFontSize)
+        XCTAssertEqual(10, decoded.metadataFontSize)
+    }
+
+    func testEncodedSettingsPreserveUnlimitedHistoryMode() throws {
+        var settings = AppSettingsSnapshot.default
+        settings.isHistoryLimitEnabled = false
+        settings.historyLimit = 64
+
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettingsSnapshot.self, from: data)
+
+        XCTAssertFalse(decoded.isHistoryLimitEnabled)
+        XCTAssertEqual(64, decoded.historyLimit)
     }
 
     func testDecodedSettingsMigrateLegacyBaseVariantToLargeUniMERNetSelection() throws {

@@ -9,14 +9,19 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
     public var outputFormat: LaTeXOutputFormat
     public var validateRender: Bool
     public var autoCopyAfterRecognition: Bool
+    public var isHistoryLimitEnabled: Bool
     public var historyLimit: Int
     public var historyTitleFontSize: Int
     public var labelFontSize: Int
+    public var paneTitleFontSize: Int
+    public var toolbarFontSize: Int
+    public var metadataFontSize: Int
     public var latexEditorFontSize: Int
     public var latexEditorFontFamily: LaTeXEditorFontFamily
     public var logVerbosity: LogVerbosity
     public var workerScriptPath: String
     public var snipShortcut: GlobalKeyboardShortcut
+    public var openAppShortcut: GlobalKeyboardShortcut
 
     public init(
         condaPath: String,
@@ -27,14 +32,19 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         outputFormat: LaTeXOutputFormat,
         validateRender: Bool,
         autoCopyAfterRecognition: Bool,
+        isHistoryLimitEnabled: Bool,
         historyLimit: Int,
         historyTitleFontSize: Int,
         labelFontSize: Int,
+        paneTitleFontSize: Int,
+        toolbarFontSize: Int,
+        metadataFontSize: Int,
         latexEditorFontSize: Int,
         latexEditorFontFamily: LaTeXEditorFontFamily,
         logVerbosity: LogVerbosity,
         workerScriptPath: String,
-        snipShortcut: GlobalKeyboardShortcut
+        snipShortcut: GlobalKeyboardShortcut,
+        openAppShortcut: GlobalKeyboardShortcut
     ) {
         self.condaPath = condaPath
         self.environmentName = environmentName
@@ -44,14 +54,19 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         self.outputFormat = outputFormat
         self.validateRender = true
         self.autoCopyAfterRecognition = autoCopyAfterRecognition
+        self.isHistoryLimitEnabled = isHistoryLimitEnabled
         self.historyLimit = historyLimit
         self.historyTitleFontSize = Self.clampedFontSize(historyTitleFontSize)
         self.labelFontSize = Self.clampedFontSize(labelFontSize)
+        self.paneTitleFontSize = Self.clampedFontSize(paneTitleFontSize)
+        self.toolbarFontSize = Self.clampedFontSize(toolbarFontSize)
+        self.metadataFontSize = Self.clampedFontSize(metadataFontSize)
         self.latexEditorFontSize = Self.clampedFontSize(latexEditorFontSize)
         self.latexEditorFontFamily = latexEditorFontFamily
         self.logVerbosity = logVerbosity
         self.workerScriptPath = workerScriptPath
         self.snipShortcut = snipShortcut
+        self.openAppShortcut = openAppShortcut
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -63,14 +78,19 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         case outputFormat
         case validateRender
         case autoCopyAfterRecognition
+        case isHistoryLimitEnabled
         case historyLimit
         case historyTitleFontSize
         case labelFontSize
+        case paneTitleFontSize
+        case toolbarFontSize
+        case metadataFontSize
         case latexEditorFontSize
         case latexEditorFontFamily
         case logVerbosity
         case workerScriptPath
         case snipShortcut
+        case openAppShortcut
     }
 
     public init(from decoder: Decoder) throws {
@@ -85,9 +105,13 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         outputFormat = try container.decodeIfPresent(LaTeXOutputFormat.self, forKey: .outputFormat) ?? defaults.outputFormat
         validateRender = true
         autoCopyAfterRecognition = try container.decodeIfPresent(Bool.self, forKey: .autoCopyAfterRecognition) ?? defaults.autoCopyAfterRecognition
+        isHistoryLimitEnabled = try container.decodeIfPresent(Bool.self, forKey: .isHistoryLimitEnabled) ?? defaults.isHistoryLimitEnabled
         historyLimit = max(4, try container.decodeIfPresent(Int.self, forKey: .historyLimit) ?? defaults.historyLimit)
         historyTitleFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .historyTitleFontSize) ?? defaults.historyTitleFontSize)
         labelFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .labelFontSize) ?? defaults.labelFontSize)
+        paneTitleFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .paneTitleFontSize) ?? defaults.paneTitleFontSize)
+        toolbarFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .toolbarFontSize) ?? defaults.toolbarFontSize)
+        metadataFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .metadataFontSize) ?? defaults.metadataFontSize)
         latexEditorFontSize = Self.clampedFontSize(try container.decodeIfPresent(Int.self, forKey: .latexEditorFontSize) ?? defaults.latexEditorFontSize)
         latexEditorFontFamily = try container.decodeIfPresent(LaTeXEditorFontFamily.self, forKey: .latexEditorFontFamily) ?? defaults.latexEditorFontFamily
         logVerbosity = try container.decodeIfPresent(LogVerbosity.self, forKey: .logVerbosity) ?? defaults.logVerbosity
@@ -95,6 +119,7 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
             savedPath: try container.decodeIfPresent(String.self, forKey: .workerScriptPath) ?? defaults.workerScriptPath
         )
         snipShortcut = try container.decodeIfPresent(GlobalKeyboardShortcut.self, forKey: .snipShortcut) ?? defaults.snipShortcut
+        openAppShortcut = try container.decodeIfPresent(GlobalKeyboardShortcut.self, forKey: .openAppShortcut) ?? defaults.openAppShortcut
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -108,14 +133,19 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         try container.encode(outputFormat, forKey: .outputFormat)
         try container.encode(true, forKey: .validateRender)
         try container.encode(autoCopyAfterRecognition, forKey: .autoCopyAfterRecognition)
+        try container.encode(isHistoryLimitEnabled, forKey: .isHistoryLimitEnabled)
         try container.encode(max(4, historyLimit), forKey: .historyLimit)
         try container.encode(Self.clampedFontSize(historyTitleFontSize), forKey: .historyTitleFontSize)
         try container.encode(Self.clampedFontSize(labelFontSize), forKey: .labelFontSize)
+        try container.encode(Self.clampedFontSize(paneTitleFontSize), forKey: .paneTitleFontSize)
+        try container.encode(Self.clampedFontSize(toolbarFontSize), forKey: .toolbarFontSize)
+        try container.encode(Self.clampedFontSize(metadataFontSize), forKey: .metadataFontSize)
         try container.encode(Self.clampedFontSize(latexEditorFontSize), forKey: .latexEditorFontSize)
         try container.encode(latexEditorFontFamily, forKey: .latexEditorFontFamily)
         try container.encode(logVerbosity, forKey: .logVerbosity)
         try container.encode(workerScriptPath, forKey: .workerScriptPath)
         try container.encode(snipShortcut, forKey: .snipShortcut)
+        try container.encode(openAppShortcut, forKey: .openAppShortcut)
     }
 
     public static let `default` = AppSettingsSnapshot(
@@ -127,14 +157,19 @@ public struct AppSettingsSnapshot: Codable, Equatable, Sendable {
         outputFormat: .raw,
         validateRender: true,
         autoCopyAfterRecognition: false,
+        isHistoryLimitEnabled: true,
         historyLimit: 40,
         historyTitleFontSize: 13,
         labelFontSize: 12,
+        paneTitleFontSize: 13,
+        toolbarFontSize: 12,
+        metadataFontSize: 11,
         latexEditorFontSize: 14,
         latexEditorFontFamily: .monospaced,
         logVerbosity: .normal,
         workerScriptPath: AppSettingsSnapshot.defaultWorkerScriptPath(),
-        snipShortcut: .defaultSnip
+        snipShortcut: .defaultSnip,
+        openAppShortcut: .defaultOpenApp
     )
 
     public static func clampedFontSize(_ size: Int) -> Int {
