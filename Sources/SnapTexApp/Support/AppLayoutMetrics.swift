@@ -16,10 +16,17 @@ enum AppLayoutMetrics {
     static let toolbarActionButtonMinWidth: CGFloat = 82
     static let toolbarDownloadProgressWidth: CGFloat = 120
     static let toolbarStatusWidth: CGFloat = 180
+    static let mainWindowTitlebarHeight: CGFloat = 30
+    static let mainWindowTitlebarTitleWidth: CGFloat = 160
     static let mainWindowMinWidth: CGFloat = 1_340
     static let mainWindowMinHeight: CGFloat = 680
-    static let settingsWindowMinWidth: CGFloat = 780
-    static let settingsWindowIdealWidth: CGFloat = 900
+    static let settingsControlsPaneMinWidth: CGFloat = 430
+    static let settingsControlsPaneIdealWidth: CGFloat = 470
+    static let settingsControlsPaneMaxWidth: CGFloat = 560
+    static let settingsLogsPaneMinWidth: CGFloat = 460
+    static let settingsModelTitleMinWidth: CGFloat = 112
+    static let settingsWindowMinWidth: CGFloat = 960
+    static let settingsWindowIdealWidth: CGFloat = 1_100
     static let settingsWindowMinHeight: CGFloat = 520
     static let settingsWindowIdealHeight: CGFloat = 640
 }

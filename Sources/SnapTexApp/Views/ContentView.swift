@@ -323,12 +323,12 @@ private struct ToolbarStatusView: View {
                     .frame(width: compact ? 86 : AppLayoutMetrics.toolbarDownloadProgressWidth)
 
                 if !compact {
-                    Text("Downloading \(activeDownload.variant.title) model")
+                    Text("Downloading \(activeDownload.variant.title)")
                         .font(.system(size: CGFloat(model.settings.toolbarFontSize)))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
-                        .frame(width: AppLayoutMetrics.toolbarStatusWidth, alignment: .leading)
+                        .frame(width: AppLayoutMetrics.toolbarStatusWidth, alignment: .trailing)
                 }
             } else {
                 if model.isCurrentItemRecognizing {

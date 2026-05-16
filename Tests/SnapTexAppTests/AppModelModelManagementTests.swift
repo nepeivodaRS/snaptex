@@ -17,6 +17,8 @@ final class AppModelModelManagementTests: XCTestCase {
             model.activeModelDownload?.progress == 0.5
         }
 
+        XCTAssertEqual("Downloading UniMERNet L", model.status)
+
         downloader.finish()
     }
 
@@ -62,6 +64,22 @@ final class AppModelModelManagementTests: XCTestCase {
 
         XCTAssertTrue(model.canRevealModelFiles(.tiny))
         XCTAssertFalse(model.canRevealModelFiles(.base))
+    }
+
+    func testCanRequestPaddlePaddleModelDeletion() {
+        let model = AppModel()
+        let variant = OCRModelSelection(provider: .paddlePaddle, size: .large)
+
+        XCTAssertEqual(.available, model.modelState(for: variant))
+
+        model.requestModelDeletion(variant)
+
+        XCTAssertEqual(PendingModelDeletion(variant: variant), model.pendingModelDeletion)
+
+        model.deletePendingModel()
+
+        XCTAssertNil(model.pendingModelDeletion)
+        XCTAssertEqual("PaddlePaddle L model deleted", model.status)
     }
 
     private func waitFor(

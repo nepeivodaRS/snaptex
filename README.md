@@ -14,7 +14,11 @@
   <img alt="OCR models" src="https://img.shields.io/badge/OCR-UniMERNet%20%2B%20PaddlePaddle-2f6fed">
 </p>
 
-## Install on macOS
+## What it does
+
+SnapTex runs locally on macOS. Capture an equation, choose a UniMERNet or PaddlePaddle model size, then copy the LaTeX or export the rendered formula.
+
+## Install
 
 Requirements: macOS 13+, Xcode Command Line Tools, and Miniforge or Conda.
 
@@ -24,8 +28,16 @@ xcode-select --install
 ./scripts/build_and_run.sh
 ```
 
-The setup script creates a dedicated `snaptex` conda environment, installs UniMERNet plus PaddleOCR runtime dependencies, and downloads the default UniMERNet model into snaptex's macOS Application Support directory. Advanced installs can set `SNAPTEX_ENV_NAME`, `SNAPTEX_UNIMERNET_DIR`, or `SNAPTEX_MODEL_SIZE` (`s`, `m`, or `l`) before running the script. The legacy `SNAPTEX_MODEL_VARIANT` values `tiny`, `small`, and `base` still work.
+The setup script creates a dedicated `snaptex` conda environment, installs UniMERNet plus PaddleOCR runtime dependencies, and downloads the default UniMERNet model into snaptex's macOS Application Support directory.
+
+Optional environment variables:
+
+- `SNAPTEX_ENV_NAME`: conda environment name
+- `SNAPTEX_UNIMERNET_DIR`: custom UniMERNet model directory
+- `SNAPTEX_MODEL_SIZE`: `s`, `m`, or `l`
+
+The legacy `SNAPTEX_MODEL_VARIANT` values `tiny`, `small`, and `base` still work.
 
 ## Credit
 
-OCR is powered by [opendatalab/UniMERNet](https://github.com/opendatalab/UniMERNet) and PaddlePaddle's [PP-FormulaNet_plus](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-L) models.
+OCR is powered by [OpenDataLab UniMERNet](https://github.com/opendatalab/UniMERNet) and [PaddlePaddle](https://github.com/PaddlePaddle), including [PP-FormulaNet_plus](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-L).

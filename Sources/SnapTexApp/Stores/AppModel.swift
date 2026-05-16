@@ -257,8 +257,9 @@ final class AppModel: ObservableObject {
     }
 
     func requestModelDeletion(_ variant: UniMERModelVariant) {
-        guard variant.requiresManagedFiles,
-              modelState(for: variant).isInstalled else {
+        let state = modelState(for: variant)
+        guard state.isInstalled,
+              !state.isDownloading else {
             return
         }
         pendingModelDeletion = PendingModelDeletion(variant: variant)
@@ -923,7 +924,7 @@ final class AppModel: ObservableObject {
 
         let configuration = workerConfiguration
         setModelDownloadState(.downloading(progress: 0), for: variant)
-        status = "Downloading \(variant.title) model"
+        status = "Downloading \(variant.title)"
 
         Task {
             do {
@@ -956,20 +957,25 @@ final class AppModel: ObservableObject {
     }
 
     private func deleteModel(_ variant: UniMERModelVariant) {
-        guard variant.requiresManagedFiles else {
-            return
-        }
-
         let fileManager = FileManager.default
-        let modelDirectory = modelDirectoryURL(for: variant)
 
-        for candidate in variant.modelFileCandidates(in: settings.uniMERNetPath) {
-            if fileManager.fileExists(atPath: candidate.path) {
-                try? fileManager.removeItem(at: candidate)
+        if variant.requiresManagedFiles {
+            let modelDirectory = modelDirectoryURL(for: variant)
+
+            for candidate in variant.modelFileCandidates(in: settings.uniMERNetPath) {
+                if fileManager.fileExists(atPath: candidate.path) {
+                    try? fileManager.removeItem(at: candidate)
+                }
             }
-        }
-        if fileManager.fileExists(atPath: modelDirectory.path) {
-            try? fileManager.removeItem(at: modelDirectory)
+            if fileManager.fileExists(atPath: modelDirectory.path) {
+                try? fileManager.removeItem(at: modelDirectory)
+            }
+        } else {
+            for candidate in paddleModelCacheCandidates(for: variant) {
+                if fileManager.fileExists(atPath: candidate.path) {
+                    try? fileManager.removeItem(at: candidate)
+                }
+            }
         }
 
         setModelDownloadState(nil, for: variant)
@@ -1389,6 +1395,16 @@ final class AppModel: ObservableObject {
         URL(fileURLWithPath: (settings.uniMERNetPath as NSString).expandingTildeInPath)
             .appendingPathComponent("models")
             .appendingPathComponent(variant.directoryName)
+    }
+
+    private func paddleModelCacheCandidates(for variant: UniMERModelVariant) -> [URL] {
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        let modelName = variant.workerModelName
+        return [
+            home.appendingPathComponent(".paddlex/official_models").appendingPathComponent(modelName),
+            home.appendingPathComponent(".paddleocr/whl/formula").appendingPathComponent(modelName),
+            home.appendingPathComponent(".cache/paddleocr").appendingPathComponent(modelName)
+        ]
     }
 
     private func modelRevealURL(for variant: UniMERModelVariant) -> URL? {

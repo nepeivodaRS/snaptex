@@ -10,26 +10,36 @@ struct SnapTexApp: App {
 
     var body: some Scene {
         Window("snaptex", id: "main") {
-            ContentView(model: model)
-                .frame(
-                    minWidth: AppLayoutMetrics.mainWindowMinWidth,
-                    minHeight: AppLayoutMetrics.mainWindowMinHeight
-                )
-                .background(
-                    WindowMinimumSizeEnforcer(
-                        minSize: NSSize(
-                            width: AppLayoutMetrics.mainWindowMinWidth,
-                            height: AppLayoutMetrics.mainWindowMinHeight
-                        )
+            ZStack {
+                AppTheme.windowBackground.ignoresSafeArea()
+
+                ContentView(model: model)
+                    .frame(
+                        minWidth: AppLayoutMetrics.mainWindowMinWidth,
+                        minHeight: AppLayoutMetrics.mainWindowMinHeight
                     )
-                    .frame(width: 0, height: 0)
-                )
-                .onAppear {
-                    appDelegate.configure(model: model, openMainWindow: {
-                        openMainWindow()
-                    })
-                }
+                    .background(
+                        ZStack {
+                            WindowChromeConfigurator(hidesTitle: true, titlebarTitle: "snaptex")
+                                .frame(width: 0, height: 0)
+
+                            WindowMinimumSizeEnforcer(
+                                minSize: NSSize(
+                                    width: AppLayoutMetrics.mainWindowMinWidth,
+                                    height: AppLayoutMetrics.mainWindowMinHeight
+                                )
+                            )
+                            .frame(width: 0, height: 0)
+                        }
+                    )
+            }
+            .onAppear {
+                appDelegate.configure(model: model, openMainWindow: {
+                    openMainWindow()
+                })
+            }
         }
+        .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(replacing: .newItem) {}
 
@@ -186,6 +196,11 @@ private func bringWindowToFront(titled title: String) -> Bool {
     }
 
     NSApp.setActivationPolicy(.regular)
+    configureWindowChrome(
+        window,
+        hidesTitle: title == "snaptex",
+        titlebarTitle: title == "snaptex" ? "snaptex" : nil
+    )
     if window.isMiniaturized {
         window.deminiaturize(nil)
     }
@@ -273,6 +288,7 @@ enum SettingsWindowPresenter {
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Settings"
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        configureWindowChrome(window)
         window.contentMinSize = NSSize(
             width: AppLayoutMetrics.settingsWindowMinWidth,
             height: AppLayoutMetrics.settingsWindowMinHeight
@@ -301,4 +317,118 @@ enum SettingsWindowPresenter {
         window = nil
     }
     #endif
+}
+
+private struct WindowChromeConfigurator: NSViewRepresentable {
+    let hidesTitle: Bool
+    let titlebarTitle: String?
+
+    func makeNSView(context: Context) -> ChromeView {
+        ChromeView(hidesTitle: hidesTitle, titlebarTitle: titlebarTitle)
+    }
+
+    func updateNSView(_ view: ChromeView, context: Context) {
+        view.hidesTitle = hidesTitle
+        view.titlebarTitle = titlebarTitle
+        view.configureWindow()
+    }
+
+    final class ChromeView: NSView {
+        var hidesTitle: Bool
+        var titlebarTitle: String?
+
+        init(hidesTitle: Bool, titlebarTitle: String?) {
+            self.hidesTitle = hidesTitle
+            self.titlebarTitle = titlebarTitle
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            configureWindow()
+        }
+
+        func configureWindow() {
+            guard let window else {
+                return
+            }
+            configureWindowChrome(window, hidesTitle: hidesTitle, titlebarTitle: titlebarTitle)
+        }
+    }
+}
+
+@MainActor
+private func configureWindowChrome(
+    _ window: NSWindow,
+    hidesTitle: Bool = false,
+    titlebarTitle: String? = nil
+) {
+    window.styleMask.insert(.fullSizeContentView)
+    window.backgroundColor = AppTheme.windowBackgroundNSColor
+    window.titleVisibility = hidesTitle ? .hidden : .visible
+    window.titlebarAppearsTransparent = true
+    window.titlebarSeparatorStyle = .none
+    window.isMovableByWindowBackground = true
+    window.appearance = NSAppearance(named: .darkAqua)
+    window.contentView?.wantsLayer = true
+    window.contentView?.layer?.backgroundColor = AppTheme.windowBackgroundNSColor.cgColor
+    configureTitlebarBackground(for: window)
+    configureTitlebarTitle(for: window, title: titlebarTitle)
+}
+
+@MainActor
+private func configureTitlebarBackground(for window: NSWindow) {
+    let titlebarViews = [
+        window.standardWindowButton(.closeButton)?.superview?.superview,
+        window.standardWindowButton(.closeButton)?.superview
+    ]
+
+    for view in titlebarViews.compactMap({ $0 }) {
+        view.wantsLayer = true
+        view.layer?.backgroundColor = AppTheme.windowBackgroundNSColor.cgColor
+    }
+}
+
+@MainActor
+private func configureTitlebarTitle(for window: NSWindow, title: String?) {
+    let identifier = NSUserInterfaceItemIdentifier("SnapTexTitlebarTitle")
+    let accessoryControllers = window.titlebarAccessoryViewControllers
+    for index in accessoryControllers.indices.reversed() where accessoryControllers[index].view.identifier == identifier {
+        window.removeTitlebarAccessoryViewController(at: index)
+    }
+
+    guard let title else {
+        return
+    }
+
+    let titleView = NSView(frame: NSRect(
+        x: 0,
+        y: 0,
+        width: AppLayoutMetrics.mainWindowTitlebarTitleWidth,
+        height: AppLayoutMetrics.mainWindowTitlebarHeight
+    ))
+    titleView.identifier = identifier
+    titleView.wantsLayer = true
+    titleView.layer?.backgroundColor = AppTheme.windowBackgroundNSColor.cgColor
+
+    let label = NSTextField(labelWithString: title)
+    label.font = .systemFont(ofSize: 13, weight: .semibold)
+    label.textColor = NSColor.labelColor.withAlphaComponent(0.72)
+    label.translatesAutoresizingMaskIntoConstraints = false
+    titleView.addSubview(label)
+
+    NSLayoutConstraint.activate([
+        label.leadingAnchor.constraint(equalTo: titleView.leadingAnchor, constant: 2),
+        label.centerYAnchor.constraint(equalTo: titleView.centerYAnchor)
+    ])
+
+    let controller = NSTitlebarAccessoryViewController()
+    controller.view = titleView
+    controller.layoutAttribute = .left
+    window.addTitlebarAccessoryViewController(controller)
 }

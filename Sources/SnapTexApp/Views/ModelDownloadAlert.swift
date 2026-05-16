@@ -1,4 +1,5 @@
 import SwiftUI
+import SnapTexCore
 
 extension View {
     func modelDownloadAlert(model: AppModel) -> some View {
@@ -26,7 +27,7 @@ extension View {
         )) { request in
             Alert(
                 title: Text("Delete \(request.variant.title) model?"),
-                message: Text("This removes the local model files from \(model.settings.uniMERNetPath)."),
+                message: Text(deletionMessage(for: request.variant, model: model)),
                 primaryButton: .destructive(Text("Delete")) {
                     model.deletePendingModel()
                 },
@@ -35,5 +36,12 @@ extension View {
                 }
             )
         }
+    }
+
+    private func deletionMessage(for variant: UniMERModelVariant, model: AppModel) -> String {
+        if variant.requiresManagedFiles {
+            return "This removes the local model files from \(model.settings.uniMERNetPath)."
+        }
+        return "This clears local PaddleOCR cached model files when present."
     }
 }

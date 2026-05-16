@@ -44,6 +44,15 @@ public enum OCRModelProvider: String, CaseIterable, Codable, Identifiable, Senda
             return "PaddlePaddle"
         }
     }
+
+    public var repositoryURL: URL {
+        switch self {
+        case .uniMERNet:
+            return URL(string: "https://github.com/opendatalab")!
+        case .paddlePaddle:
+            return URL(string: "https://github.com/PaddlePaddle")!
+        }
+    }
 }
 
 public enum OCRModelSize: String, CaseIterable, Codable, Identifiable, Sendable {

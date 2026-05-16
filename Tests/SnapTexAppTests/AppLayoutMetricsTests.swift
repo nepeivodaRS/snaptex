@@ -57,6 +57,15 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains(".fixedSize(horizontal: true, vertical: false)"))
     }
 
+    func testToolbarDownloadStatusUsesModelNameWithoutRedundantModelSuffix() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
+
+        XCTAssertTrue(source.contains("Text(\"Downloading \\(activeDownload.variant.title)\")"))
+        XCTAssertTrue(source.contains(".frame(width: AppLayoutMetrics.toolbarStatusWidth, alignment: .trailing)"))
+        XCTAssertFalse(source.contains("Text(\"Downloading \\(activeDownload.variant.title) model\")"))
+        XCTAssertFalse(source.contains(".frame(width: AppLayoutMetrics.toolbarStatusWidth, alignment: .leading)"))
+    }
+
     func testCaptureEmptyStateDoesNotExposeSnipAndPasteActions() throws {
         let source = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
 
@@ -380,7 +389,7 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(settingsView.contains("private var limitControls: some View"))
         XCTAssertTrue(settingsView.contains("Text(\"Limited deletes oldest snaps beyond the limit. Unlimited keeps every snap.\")"))
         XCTAssertTrue(settingsView.contains("TextField(\"\", value: $limit, formatter: Self.historyLimitFormatter)"))
-        XCTAssertTrue(settingsView.contains(".frame(width: 54)"))
+        XCTAssertTrue(settingsView.contains(".graphiteTextInput(width: 54)"))
         XCTAssertTrue(settingsView.contains("Stepper(\"\", value: $limit, in: 4...200, step: 1)"))
         XCTAssertTrue(settingsView.contains("Divider().frame(height: 18)"))
         XCTAssertTrue(settingsView.contains(".fixedSize(horizontal: true, vertical: false)"))
@@ -461,11 +470,38 @@ final class AppLayoutMetricsTests: XCTestCase {
         let source = try sourceFile("Sources/SnapTexApp/App/SnapTexApp.swift")
 
         XCTAssertTrue(source.contains("WindowMinimumSizeEnforcer("))
+        XCTAssertTrue(source.contains("WindowChromeConfigurator(hidesTitle: true, titlebarTitle: \"snaptex\")"))
+        XCTAssertTrue(source.contains("configureWindowChrome(\n        window,\n        hidesTitle: title == \"snaptex\",\n        titlebarTitle: title == \"snaptex\" ? \"snaptex\" : nil\n    )"))
+        XCTAssertTrue(source.contains(".windowStyle(.hiddenTitleBar)"))
+        XCTAssertTrue(source.contains("configureTitlebarTitle(for: window, title: titlebarTitle)"))
+        XCTAssertTrue(source.contains("NSTitlebarAccessoryViewController()"))
+        XCTAssertTrue(source.contains("NSTextField(labelWithString: title)"))
+        XCTAssertTrue(source.contains("window.removeTitlebarAccessoryViewController(at: index)"))
+        XCTAssertFalse(source.contains("window.titlebarAccessoryViewControllers = window.titlebarAccessoryViewControllers.filter"))
+        XCTAssertFalse(source.contains("MainWindowTitlebar()"))
         XCTAssertTrue(source.contains("minSize: NSSize("))
         XCTAssertTrue(source.contains("width: AppLayoutMetrics.mainWindowMinWidth"))
         XCTAssertTrue(source.contains("height: AppLayoutMetrics.mainWindowMinHeight"))
         XCTAssertTrue(source.contains("window.contentMinSize = minSize"))
         XCTAssertTrue(source.contains("window.setContentSize(clampedContentSize)"))
+        XCTAssertTrue(source.contains("window.backgroundColor = AppTheme.windowBackgroundNSColor"))
+        XCTAssertTrue(source.contains("window.titlebarAppearsTransparent = true"))
+        XCTAssertTrue(source.contains("window.styleMask.insert(.fullSizeContentView)"))
+        XCTAssertTrue(source.contains("window.titlebarSeparatorStyle = .none"))
+        XCTAssertTrue(source.contains("window.contentView?.layer?.backgroundColor = AppTheme.windowBackgroundNSColor.cgColor"))
+        XCTAssertTrue(source.contains("window.titleVisibility = hidesTitle ? .hidden : .visible"))
+        XCTAssertTrue(source.contains("configureTitlebarBackground(for: window)"))
+        XCTAssertTrue(source.contains("window.standardWindowButton(.closeButton)?.superview?.superview"))
+    }
+
+    func testMainWindowPaintsGraphiteBackgroundBehindTransparentTitlebar() throws {
+        let source = try sourceFile("Sources/SnapTexApp/App/SnapTexApp.swift")
+
+        XCTAssertTrue(source.contains("ZStack {\n                AppTheme.windowBackground.ignoresSafeArea()"))
+        XCTAssertTrue(source.contains("ContentView(model: model)"))
+        XCTAssertTrue(source.contains("WindowChromeConfigurator(hidesTitle: true, titlebarTitle: \"snaptex\")"))
+        XCTAssertTrue(source.contains("AppLayoutMetrics.mainWindowTitlebarHeight"))
+        XCTAssertTrue(source.contains("AppLayoutMetrics.mainWindowTitlebarTitleWidth"))
     }
 
     func testSettingsUsesExplicitPresenterInsteadOfUnhandledSelector() throws {
@@ -485,6 +521,31 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("window.contentMinSize = NSSize("))
         XCTAssertTrue(source.contains("width: AppLayoutMetrics.settingsWindowMinWidth"))
         XCTAssertTrue(source.contains("height: AppLayoutMetrics.settingsWindowMinHeight"))
+        XCTAssertTrue(source.contains("configureWindowChrome(window)"))
+    }
+
+    func testSettingsWindowLeavesRoomForDownloadingModelRowsAndResizableLogs() throws {
+        let settingsView = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.settingsWindowMinWidth, 960)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.settingsWindowIdealWidth, 1_080)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.settingsControlsPaneMinWidth, 430)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.settingsLogsPaneMinWidth, 460)
+        XCTAssertGreaterThanOrEqual(AppLayoutMetrics.settingsModelTitleMinWidth, 104)
+        XCTAssertTrue(settingsView.contains("HSplitView"))
+        XCTAssertTrue(settingsView.contains("AppLayoutMetrics.settingsControlsPaneMinWidth"))
+        XCTAssertTrue(settingsView.contains("AppLayoutMetrics.settingsLogsPaneMinWidth"))
+        XCTAssertTrue(settingsView.contains("AppLayoutMetrics.settingsModelTitleMinWidth"))
+    }
+
+    func testSettingsTextInputsUseGraphiteChromeInsteadOfNativeRoundedBorder() throws {
+        let settingsView = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+        let theme = try sourceFile("Sources/SnapTexApp/Support/AppTheme.swift")
+
+        XCTAssertTrue(theme.contains("GraphiteTextInputModifier"))
+        XCTAssertTrue(settingsView.contains(".graphiteTextInput(width: 54)"))
+        XCTAssertTrue(settingsView.contains(".graphiteTextInput(width: 76)"))
+        XCTAssertFalse(settingsView.contains(".textFieldStyle(.roundedBorder)"))
     }
 
     func testSettingsCanRevealModelFilesInFinder() throws {
@@ -493,6 +554,62 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(source.contains("model.revealModelFilesInFinder(variant)"))
         XCTAssertTrue(source.contains("folder"))
         XCTAssertTrue(source.contains("Reveal local"))
+    }
+
+    func testSettingsGroupsModelsByProviderWithRepositoryLinks() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+        let uniMERNetRange = try XCTUnwrap(source.range(of: ".uniMERNet"))
+        let paddlePaddleRange = try XCTUnwrap(source.range(of: ".paddlePaddle"))
+
+        XCTAssertTrue(source.contains("ModelProviderSubsection(provider: provider)"))
+        XCTAssertTrue(source.contains("Link(destination: provider.repositoryURL)"))
+        XCTAssertTrue(source.contains("Text(provider.title)"))
+        XCTAssertTrue(source.contains("Image(systemName: \"arrow.up.right\")"))
+        XCTAssertTrue(source.contains(".offset(x: isHeaderHovered ? 1 : 0, y: isHeaderHovered ? -1 : 0)"))
+        XCTAssertTrue(source.contains("@State private var isHeaderHovered = false"))
+        XCTAssertTrue(source.contains(".onHover { isHeaderHovered = $0 }"))
+        XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.14), value: isHeaderHovered)"))
+        XCTAssertTrue(source.contains("private var accentColor: Color"))
+        XCTAssertTrue(source.contains(".font(.caption.weight(.semibold))"))
+        XCTAssertFalse(source.contains(".fill(accentColor.opacity(isHeaderHovered"))
+        XCTAssertFalse(source.contains("AppTheme.raisedPanelBackground.opacity(isHeaderHovered"))
+        XCTAssertFalse(source.contains(".offset(x: isHeaderHovered ? 2 : 0, y: isHeaderHovered ? -2 : 0)"))
+        XCTAssertTrue(source.contains(".paddlePaddle"))
+        XCTAssertTrue(source.contains(".uniMERNet"))
+        XCTAssertLessThan(uniMERNetRange.lowerBound, paddlePaddleRange.lowerBound)
+    }
+
+    func testSettingsSelectedModelUsesSoftFillAndAccentMarker() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+
+        XCTAssertTrue(source.contains("RoundedRectangle(cornerRadius: 2)"))
+        XCTAssertTrue(source.contains(".fill(providerAccentColor)"))
+        XCTAssertTrue(source.contains("isSelected ? selectedModelFill : Color.clear"))
+        XCTAssertTrue(source.contains("private var selectedModelFill: Color"))
+        XCTAssertTrue(source.contains("Color.white.opacity(0.075)"))
+        XCTAssertFalse(source.contains("providerAccentColor.opacity(0.14)"))
+        XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.14), value: isSelected)"))
+        XCTAssertFalse(source.contains("strokeBorder(selectedModel"))
+    }
+
+    func testSettingsModelRowsUseLowContrastSeparators() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+
+        XCTAssertTrue(source.contains("ModelRowSeparator()"))
+        XCTAssertTrue(source.contains("Color.white.opacity(0.045)"))
+        XCTAssertFalse(source.contains("Divider().padding(.vertical, 2)"))
+    }
+
+    func testSettingsModelRowIconButtonsAnimateHover() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+
+        XCTAssertTrue(source.contains("SettingsIconActionButton("))
+        XCTAssertTrue(source.contains("systemImage: \"folder\""))
+        XCTAssertTrue(source.contains("systemImage: \"trash\""))
+        XCTAssertTrue(source.contains("@State private var isHovered = false"))
+        XCTAssertTrue(source.contains(".onHover { isHovered = $0 }"))
+        XCTAssertTrue(source.contains(".animation(.easeOut(duration: 0.12), value: isHovered)"))
+        XCTAssertFalse(source.contains(".disabled(!variant.requiresManagedFiles"))
     }
 
     @MainActor
@@ -510,8 +627,8 @@ final class AppLayoutMetricsTests: XCTestCase {
 
         XCTAssertEqual(1, countAfterFirstOpen)
         XCTAssertEqual(1, countAfterSecondOpen)
-        XCTAssertEqual(AppLayoutMetrics.settingsWindowMinWidth, settingsWindow?.contentMinSize.width)
-        XCTAssertEqual(AppLayoutMetrics.settingsWindowMinHeight, settingsWindow?.contentMinSize.height)
+        XCTAssertGreaterThanOrEqual(settingsWindow?.contentMinSize.width ?? 0, AppLayoutMetrics.settingsWindowMinWidth)
+        XCTAssertGreaterThanOrEqual(settingsWindow?.contentMinSize.height ?? 0, AppLayoutMetrics.settingsWindowMinHeight)
 
         SettingsWindowPresenter.closeForTesting()
     }

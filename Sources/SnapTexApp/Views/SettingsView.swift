@@ -6,19 +6,10 @@ struct SettingsView: View {
     @ObservedObject var model: AppModel
 
     var body: some View {
-        HStack(alignment: .top, spacing: 18) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    modelsSection
-                    outputSection
-                    shortcutsSection
-                    textSection
-                }
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-            }
-            .frame(minWidth: 340, idealWidth: 390, maxWidth: 440)
-
+        HSplitView {
+            settingsControlsPane
             logsSection
+                .frame(minWidth: AppLayoutMetrics.settingsLogsPaneMinWidth)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -29,29 +20,66 @@ struct SettingsView: View {
         .modelDeletionAlert(model: model)
     }
 
+    private var settingsControlsPane: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 12) {
+                modelsSection
+                outputSection
+                shortcutsSection
+                textSection
+            }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+        .frame(
+            minWidth: AppLayoutMetrics.settingsControlsPaneMinWidth,
+            idealWidth: AppLayoutMetrics.settingsControlsPaneIdealWidth,
+            maxWidth: AppLayoutMetrics.settingsControlsPaneMaxWidth
+        )
+    }
+
     private var modelsSection: some View {
         SettingsSection("Models") {
-            ForEach(UniMERModelVariant.allCases) { variant in
-                ModelManagementRow(
-                    variant: variant,
-                    state: model.modelState(for: variant),
-                    isSelected: model.settings.modelVariant == variant,
-                    action: {
-                        model.selectModelVariant(variant)
-                    },
-                    canRevealFiles: model.canRevealModelFiles(variant),
-                    revealAction: {
-                        model.revealModelFilesInFinder(variant)
-                    },
-                    deleteAction: {
-                        model.requestModelDeletion(variant)
-                    }
-                )
+            ForEach(Self.modelSectionProviders) { provider in
+                ModelProviderSubsection(provider: provider) {
+                    ForEach(Self.modelVariants(for: provider)) { variant in
+                        ModelManagementRow(
+                            variant: variant,
+                            state: model.modelState(for: variant),
+                            isSelected: model.settings.modelVariant == variant,
+                            action: {
+                                model.selectModelVariant(variant)
+                            },
+                            canRevealFiles: model.canRevealModelFiles(variant),
+                            revealAction: {
+                                model.revealModelFilesInFinder(variant)
+                            },
+                            deleteAction: {
+                                model.requestModelDeletion(variant)
+                            }
+                        )
 
-                if variant != UniMERModelVariant.allCases.last {
-                    Divider()
+                        if variant != Self.modelVariants(for: provider).last {
+                            ModelRowSeparator()
+                        }
+                    }
+                }
+
+                if provider != Self.modelSectionProviders.last {
+                    ModelRowSeparator()
+                        .padding(.vertical, 2)
                 }
             }
+        }
+    }
+
+    private static let modelSectionProviders: [OCRModelProvider] = [
+        .uniMERNet,
+        .paddlePaddle
+    ]
+
+    private static func modelVariants(for provider: OCRModelProvider) -> [UniMERModelVariant] {
+        OCRModelSize.allCases.map { size in
+            UniMERModelVariant(provider: provider, size: size)
         }
     }
 
@@ -250,6 +278,56 @@ struct SettingsView: View {
 
 }
 
+private struct ModelProviderSubsection<Content: View>: View {
+    let provider: OCRModelProvider
+    @ViewBuilder let content: Content
+    @State private var isHeaderHovered = false
+
+    init(provider: OCRModelProvider, @ViewBuilder content: () -> Content) {
+        self.provider = provider
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Link(destination: provider.repositoryURL) {
+                HStack(spacing: 6) {
+                    Text(provider.title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(isHeaderHovered ? accentColor : Color.primary)
+
+                    Image(systemName: "arrow.up.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(isHeaderHovered ? accentColor : Color.secondary)
+                        .offset(x: isHeaderHovered ? 1 : 0, y: isHeaderHovered ? -1 : 0)
+                }
+                .lineLimit(1)
+                .scaleEffect(isHeaderHovered ? 1.025 : 1, anchor: .leading)
+            }
+            .buttonStyle(.plain)
+            .onHover { isHeaderHovered = $0 }
+            .help("Open \(provider.title) repository")
+
+            VStack(alignment: .leading, spacing: 8) {
+                content
+            }
+        }
+        .padding(.horizontal, 2)
+        .padding(.vertical, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeOut(duration: 0.14), value: isHeaderHovered)
+    }
+
+    private var accentColor: Color {
+        switch provider {
+        case .paddlePaddle:
+            return Color(red: 0.49, green: 0.76, blue: 0.96)
+        case .uniMERNet:
+            return Color(red: 0.56, green: 0.78, blue: 0.61)
+        }
+    }
+}
+
 private struct ModelManagementRow: View {
     let variant: UniMERModelVariant
     let state: ManagedModelState
@@ -260,50 +338,80 @@ private struct ModelManagementRow: View {
     let deleteAction: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(variant.title)
-                Text(statusText)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
+        HStack(spacing: 10) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(providerAccentColor)
+                .frame(width: 3)
+                .opacity(isSelected ? 1 : 0)
 
-            Spacer(minLength: 12)
-
-            if case .downloading(let progress) = state {
-                if let progress {
-                    ProgressView(value: progress)
-                        .frame(width: 96)
-                } else {
-                    ProgressView()
-                        .controlSize(.small)
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(variant.title)
+                        .fontWeight(isSelected ? .semibold : .regular)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Text(statusText)
+                        .font(.caption)
+                        .foregroundStyle(isSelected ? Color.primary.opacity(0.68) : Color.secondary)
+                        .lineLimit(1)
                 }
-            }
+                .frame(minWidth: AppLayoutMetrics.settingsModelTitleMinWidth, alignment: .leading)
 
-            Button(action: action) {
-                Text(buttonTitle)
-                    .frame(width: 70)
-            }
-            .buttonStyle(GraphiteSecondaryButtonStyle())
-            .disabled(state.isDownloading || (state.isInstalled && isSelected))
+                Spacer(minLength: 12)
 
-            Button(action: revealAction) {
-                Image(systemName: "folder")
-                    .frame(width: 18)
-            }
-            .buttonStyle(.borderless)
-            .disabled(!canRevealFiles || state.isDownloading)
-            .help("Reveal local \(variant.title) model files in Finder")
+                if case .downloading(let progress) = state {
+                    if let progress {
+                        ProgressView(value: progress)
+                            .frame(width: 96)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                }
 
-            Button(role: .destructive, action: deleteAction) {
-                Image(systemName: "trash")
-                    .frame(width: 18)
+                Button(action: action) {
+                    Text(buttonTitle)
+                        .frame(width: 70)
+                }
+                .buttonStyle(GraphiteSecondaryButtonStyle())
+                .disabled(state.isDownloading || (state.isInstalled && isSelected))
+
+                SettingsIconActionButton(
+                    systemImage: "folder",
+                    isEnabled: canRevealFiles && !state.isDownloading,
+                    help: "Reveal local \(variant.title) model files in Finder",
+                    action: revealAction
+                )
+
+                SettingsIconActionButton(
+                    systemImage: "trash",
+                    role: .destructive,
+                    isEnabled: state.isInstalled && !state.isDownloading,
+                    help: "Delete local \(variant.title) model files",
+                    action: deleteAction
+                )
             }
-            .buttonStyle(.borderless)
-            .disabled(!variant.requiresManagedFiles || !state.isInstalled || state.isDownloading)
-            .help("Delete local \(variant.title) model files")
         }
+        .padding(.horizontal, 7)
+        .padding(.vertical, 6)
+        .background {
+            RoundedRectangle(cornerRadius: AppTheme.controlCornerRadius)
+                .fill(isSelected ? selectedModelFill : Color.clear)
+        }
+        .animation(.easeOut(duration: 0.14), value: isSelected)
+    }
+
+    private var providerAccentColor: Color {
+        switch variant.provider {
+        case .paddlePaddle:
+            return Color(red: 0.57, green: 0.65, blue: 0.72)
+        case .uniMERNet:
+            return Color(red: 0.61, green: 0.72, blue: 0.64)
+        }
+    }
+
+    private var selectedModelFill: Color {
+        Color.white.opacity(0.075)
     }
 
     private var statusText: String {
@@ -333,6 +441,65 @@ private struct ModelManagementRow: View {
         case .downloading:
             return "Wait"
         }
+    }
+}
+
+private struct ModelRowSeparator: View {
+    var body: some View {
+        Rectangle()
+            .fill(Color.white.opacity(0.045))
+            .frame(height: 1)
+            .padding(.leading, 10)
+    }
+}
+
+private struct SettingsIconActionButton: View {
+    let systemImage: String
+    var role: ButtonRole?
+    let isEnabled: Bool
+    let help: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(role: role, action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: isHovered && isEnabled ? .semibold : .regular))
+                .frame(width: 22, height: 22)
+                .foregroundStyle(foreground)
+                .background {
+                    Circle()
+                        .fill(background)
+                }
+                .scaleEffect(isHovered && isEnabled ? 1.08 : 1)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isEnabled)
+        .contentShape(Circle())
+        .onHover { isHovered = $0 }
+        .help(help)
+        .animation(.easeOut(duration: 0.12), value: isHovered)
+    }
+
+    private var foreground: Color {
+        guard isEnabled else {
+            return Color.secondary.opacity(0.34)
+        }
+        if role == .destructive {
+            return isHovered ? Color(red: 1.0, green: 0.48, blue: 0.44) : Color.secondary
+        }
+        return isHovered ? Color.primary : Color.secondary
+    }
+
+    private var background: Color {
+        guard isEnabled, isHovered else {
+            return Color.clear
+        }
+        if role == .destructive {
+            return Color(red: 1.0, green: 0.48, blue: 0.44).opacity(0.14)
+        }
+        return Color.white.opacity(0.10)
     }
 }
 
@@ -421,10 +588,8 @@ private struct SettingsHistoryLimitRow: View {
     private var limitControls: some View {
         HStack(spacing: 6) {
             TextField("", value: $limit, formatter: Self.historyLimitFormatter)
-                .textFieldStyle(.roundedBorder)
                 .multilineTextAlignment(.trailing)
-                .controlSize(.small)
-                .frame(width: 54)
+                .graphiteTextInput(width: 54)
 
             Text("items")
                 .font(.caption)
@@ -469,9 +634,8 @@ private struct SettingsFontRow: View {
 
             HStack(spacing: 8) {
                 TextField("", value: $value, formatter: Self.fontSizeFormatter)
-                    .textFieldStyle(.roundedBorder)
                     .multilineTextAlignment(.trailing)
-                    .frame(width: 76)
+                    .graphiteTextInput(width: 76)
 
                 Text("pt")
                     .foregroundStyle(.secondary)

@@ -1,7 +1,14 @@
+import AppKit
 import SwiftUI
 
 enum AppTheme {
     static let windowBackground = Color(red: 0.067, green: 0.075, blue: 0.090)
+    static let windowBackgroundNSColor = NSColor(
+        calibratedRed: 0.067,
+        green: 0.075,
+        blue: 0.090,
+        alpha: 1
+    )
     static let panelBackground = Color(red: 0.090, green: 0.102, blue: 0.122)
     static let raisedPanelBackground = Color(red: 0.110, green: 0.125, blue: 0.149)
     static let insetBackground = Color(red: 0.055, green: 0.063, blue: 0.075)
@@ -42,6 +49,24 @@ struct GraphitePrimaryButtonStyle: ButtonStyle {
 struct GraphiteSecondaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         GraphiteButtonBody(configuration: configuration, kind: .secondary)
+    }
+}
+
+struct GraphiteTextInputModifier: ViewModifier {
+    let width: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .textFieldStyle(.plain)
+            .controlSize(.small)
+            .padding(.horizontal, 7)
+            .frame(width: width, height: 24)
+            .background(AppTheme.controlBackground.opacity(0.90))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(Color.white.opacity(0.10), lineWidth: 1)
+            }
     }
 }
 
@@ -142,5 +167,9 @@ extension View {
         radius: CGFloat = AppTheme.panelCornerRadius
     ) -> some View {
         modifier(GraphitePanelModifier(background: background, border: border, radius: radius))
+    }
+
+    func graphiteTextInput(width: CGFloat) -> some View {
+        modifier(GraphiteTextInputModifier(width: width))
     }
 }

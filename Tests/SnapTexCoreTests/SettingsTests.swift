@@ -103,6 +103,11 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual("PP-FormulaNet_plus-L", model.workerModelName)
     }
 
+    func testModelProvidersExposeRepositoryURLs() {
+        XCTAssertEqual(URL(string: "https://github.com/opendatalab"), OCRModelProvider.uniMERNet.repositoryURL)
+        XCTAssertEqual(URL(string: "https://github.com/PaddlePaddle"), OCRModelProvider.paddlePaddle.repositoryURL)
+    }
+
     func testDefaultWorkerScriptPathPrefersBundledWorker() throws {
         let root = try makeTemporaryDirectory()
         let resourceWorker = root
