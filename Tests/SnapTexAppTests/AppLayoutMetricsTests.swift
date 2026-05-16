@@ -9,7 +9,6 @@ final class AppLayoutMetricsTests: XCTestCase {
             + AppLayoutMetrics.outputPaneMinWidth
             + 32
         let fullToolbarMinimumWidth = AppLayoutMetrics.toolbarPrimaryActionMinWidth
-            + 8 + AppLayoutMetrics.toolbarPrimaryActionMinWidth
             + 24
             + 1
             + AppLayoutMetrics.toolbarModelLabelWidth + 6 + 190
@@ -62,10 +61,32 @@ final class AppLayoutMetricsTests: XCTestCase {
     func testToolbarDownloadStatusUsesModelNameWithoutRedundantModelSuffix() throws {
         let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
 
-        XCTAssertTrue(source.contains("Text(\"Downloading \\(activeDownload.variant.title)\")"))
-        XCTAssertTrue(source.contains(".frame(width: AppLayoutMetrics.toolbarStatusWidth, alignment: .trailing)"))
+        XCTAssertTrue(source.contains("text: \"Downloading \\(activeDownload.variant.title)\""))
+        XCTAssertTrue(source.contains("width: AppLayoutMetrics.toolbarStatusWidth"))
         XCTAssertFalse(source.contains("Text(\"Downloading \\(activeDownload.variant.title) model\")"))
         XCTAssertFalse(source.contains(".frame(width: AppLayoutMetrics.toolbarStatusWidth, alignment: .leading)"))
+    }
+
+    func testToolbarStatusUsesInlineLabelTreatment() throws {
+        let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
+
+        XCTAssertTrue(source.contains("ToolbarStatusLabel("))
+        XCTAssertFalse(source.contains("ToolbarStatusBadge("))
+
+        let statusView = try viewSource(named: "ToolbarStatusView", in: source)
+        let labelView = try viewSource(named: "ToolbarStatusLabel", in: source)
+
+        XCTAssertTrue(statusView.contains("systemImage: \"arrow.down.circle.fill\""))
+        XCTAssertTrue(statusView.contains("private var statusIconName: String"))
+        XCTAssertTrue(statusView.contains("private var hasWarningStatus: Bool"))
+        XCTAssertFalse(labelView.contains(".clipShape(Capsule())"))
+        XCTAssertFalse(labelView.contains(".background(status"))
+        XCTAssertFalse(labelView.contains("statusBadgeBackground"))
+        XCTAssertFalse(labelView.contains("AppTheme.controlBackground"))
+        XCTAssertTrue(labelView.contains("AppTheme.snipAccent"))
+        XCTAssertTrue(labelView.contains("ProgressView()"))
+        XCTAssertTrue(labelView.contains(".accessibilityLabel(\"Status: \\(text)\""))
+        XCTAssertFalse(statusView.contains("Text(model.toolbarStatusText)"))
     }
 
     func testCaptureEmptyStateDoesNotExposeSnipOrPasteLabel() throws {
@@ -76,18 +97,15 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertFalse(source.contains("Label(\"Paste\", systemImage: \"doc.on.clipboard\")"))
     }
 
-    func testToolbarExposesSnipAndFinderAddActions() throws {
+    func testToolbarExposesOnlySnipPrimaryAction() throws {
         let source = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
-        let modelSource = try sourceFile("Sources/SnapTexApp/Stores/AppModel.swift")
 
         XCTAssertTrue(source.contains("SnipButton(model: model)"))
-        XCTAssertTrue(source.contains("AddImageButton(model: model)"))
         XCTAssertTrue(source.contains("Label(\"Snip\", systemImage: \"crop\")"))
-        XCTAssertTrue(source.contains("Label(\"Add\", systemImage: \"plus\")"))
-        XCTAssertTrue(source.contains("model.addImageFromFinder()"))
-        XCTAssertTrue(modelSource.contains("func addImageFromFinder()"))
-        XCTAssertTrue(modelSource.contains("NSOpenPanel()"))
-        XCTAssertTrue(modelSource.contains("panel.allowedContentTypes = [.image]"))
+        XCTAssertFalse(source.contains("AddImageButton(model: model)"))
+        XCTAssertFalse(source.contains("private struct AddImageButton"))
+        XCTAssertFalse(source.contains("Label(\"Add\", systemImage: \"plus\")"))
+        XCTAssertFalse(source.contains("model.addImageFromFinder()"))
         XCTAssertFalse(source.contains("model.pasteImageFromClipboard()"))
         XCTAssertFalse(source.contains("model.retry()"))
         XCTAssertFalse(source.contains("model.copyLatex()"))
@@ -149,12 +167,12 @@ final class AppLayoutMetricsTests: XCTestCase {
     func testPrimaryToolbarActionsUseMatchingLiquidHoverStyle() throws {
         let contentView = try sourceFile("Sources/SnapTexApp/Views/ContentView.swift")
         let theme = try sourceFile("Sources/SnapTexApp/Support/AppTheme.swift")
-        let addButtonSource = try viewSource(named: "AddImageButton", in: contentView)
+        let snipButtonSource = try viewSource(named: "SnipButton", in: contentView)
 
         XCTAssertTrue(contentView.contains(".buttonStyle(LiquidSnipButtonStyle())"))
-        XCTAssertTrue(addButtonSource.contains(".buttonStyle(LiquidSnipButtonStyle())"))
-        XCTAssertTrue(addButtonSource.contains(".font(.system(size: CGFloat(model.settings.snipButtonFontSize), weight: .semibold))"))
-        XCTAssertTrue(addButtonSource.contains(".frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)"))
+        XCTAssertTrue(snipButtonSource.contains(".buttonStyle(LiquidSnipButtonStyle())"))
+        XCTAssertTrue(snipButtonSource.contains(".font(.system(size: CGFloat(model.settings.snipButtonFontSize), weight: .semibold))"))
+        XCTAssertTrue(snipButtonSource.contains(".frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)"))
         XCTAssertTrue(theme.contains("struct LiquidSnipButtonStyle: ButtonStyle"))
         XCTAssertTrue(theme.contains("LiquidSnipTrackingArea("))
         XCTAssertTrue(theme.contains("RadialGradient("))
@@ -171,7 +189,7 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(theme.contains(".cursorUpdate"))
         XCTAssertTrue(theme.contains("NSCursor.pointingHand.set()"))
         XCTAssertFalse(contentView.contains(".buttonStyle(GraphitePrimaryButtonStyle())"))
-        XCTAssertFalse(addButtonSource.contains(".buttonStyle(GraphiteSecondaryButtonStyle())"))
+        XCTAssertFalse(snipButtonSource.contains(".buttonStyle(GraphiteSecondaryButtonStyle())"))
     }
 
     func testConfidenceIsNotDisplayedWithoutModelProvidedConfidence() throws {

@@ -97,7 +97,6 @@ private struct ToolbarActionStrip: View {
     var body: some View {
         HStack(spacing: 8) {
             SnipButton(model: model)
-            AddImageButton(model: model)
         }
         .fixedSize(horizontal: true, vertical: false)
     }
@@ -293,27 +292,106 @@ private struct ToolbarStatusView: View {
                     .frame(width: compact ? 86 : AppLayoutMetrics.toolbarDownloadProgressWidth)
 
                 if !compact {
-                    Text("Downloading \(activeDownload.variant.title)")
-                        .font(.system(size: CGFloat(model.settings.toolbarFontSize)))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .frame(width: AppLayoutMetrics.toolbarStatusWidth, alignment: .trailing)
+                    ToolbarStatusLabel(
+                        text: "Downloading \(activeDownload.variant.title)",
+                        systemImage: "arrow.down.circle.fill",
+                        isActive: true,
+                        isWarning: false,
+                        showsActivity: false,
+                        fontSize: model.settings.toolbarFontSize,
+                        width: AppLayoutMetrics.toolbarStatusWidth
+                    )
                 }
             } else {
-                if model.isCurrentItemRecognizing {
-                    ProgressView()
-                        .controlSize(.small)
-                }
-
-                Text(model.toolbarStatusText)
-                    .font(.system(size: CGFloat(model.settings.toolbarFontSize)))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: compact ? 120 : AppLayoutMetrics.toolbarStatusWidth, alignment: .trailing)
+                ToolbarStatusLabel(
+                    text: model.toolbarStatusText,
+                    systemImage: statusIconName,
+                    isActive: model.isCurrentItemRecognizing,
+                    isWarning: hasWarningStatus,
+                    showsActivity: model.isCurrentItemRecognizing,
+                    fontSize: model.settings.toolbarFontSize,
+                    width: compact ? 132 : AppLayoutMetrics.toolbarStatusWidth
+                )
             }
         }
+    }
+
+    private var statusIconName: String {
+        if model.isCurrentItemRecognizing {
+            return "sparkles"
+        }
+        if hasWarningStatus {
+            return "exclamationmark.triangle.fill"
+        }
+        return "circle.fill"
+    }
+
+    private var hasWarningStatus: Bool {
+        let status = model.toolbarStatusText.lowercased()
+        return status.contains("failed") ||
+            status.contains("unavailable") ||
+            status.contains("missing") ||
+            status.contains("cannot")
+    }
+}
+
+private struct ToolbarStatusLabel: View {
+    let text: String
+    let systemImage: String
+    let isActive: Bool
+    let isWarning: Bool
+    let showsActivity: Bool
+    let fontSize: Int
+    let width: CGFloat
+
+    var body: some View {
+        HStack(spacing: 6) {
+            leadingIndicator
+
+            Text(text)
+                .font(.system(size: CGFloat(fontSize), weight: .semibold))
+                .foregroundStyle(statusForeground)
+                .lineLimit(1)
+                .truncationMode(.tail)
+                .minimumScaleFactor(0.88)
+        }
+        .frame(width: width, alignment: .trailing)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Status: \(text)")
+        .animation(.easeOut(duration: 0.16), value: text)
+        .animation(.easeOut(duration: 0.16), value: isActive)
+        .animation(.easeOut(duration: 0.16), value: isWarning)
+    }
+
+    @ViewBuilder
+    private var leadingIndicator: some View {
+        if showsActivity {
+            ProgressView()
+                .controlSize(.small)
+                .tint(AppTheme.snipAccent)
+                .scaleEffect(0.72)
+                .frame(width: 13, height: 13)
+        } else {
+            Image(systemName: systemImage)
+                .font(.system(size: CGFloat(Swift.max(fontSize - 1, 10)), weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(statusAccent)
+                .frame(width: 13, height: 13)
+        }
+    }
+
+    private var statusAccent: Color {
+        if isWarning {
+            return Color(red: 1.000, green: 0.690, blue: 0.340)
+        }
+        if isActive {
+            return AppTheme.snipAccent
+        }
+        return Color.white.opacity(0.46)
+    }
+
+    private var statusForeground: Color {
+        isActive || isWarning ? .primary.opacity(0.88) : .secondary
     }
 }
 
@@ -352,22 +430,5 @@ private struct SnipButton: View {
         .buttonStyle(LiquidSnipButtonStyle())
         .disabled(!model.canStartSnip)
         .help("Capture a screen region")
-    }
-}
-
-private struct AddImageButton: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        Button {
-            model.addImageFromFinder()
-        } label: {
-            Label("Add", systemImage: "plus")
-                .font(.system(size: CGFloat(model.settings.snipButtonFontSize), weight: .semibold))
-                .frame(minWidth: AppLayoutMetrics.toolbarPrimaryActionMinWidth)
-        }
-        .buttonStyle(LiquidSnipButtonStyle())
-        .disabled(!model.canAddFromFinder)
-        .help("Add an image from Finder")
     }
 }

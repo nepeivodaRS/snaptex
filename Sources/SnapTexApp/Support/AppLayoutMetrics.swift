@@ -14,7 +14,7 @@ enum AppLayoutMetrics {
     static let toolbarPassesLabelWidth: CGFloat = 54
     static let toolbarPrimaryActionMinWidth: CGFloat = 92
     static let toolbarDownloadProgressWidth: CGFloat = 120
-    static let toolbarStatusWidth: CGFloat = 180
+    static let toolbarStatusWidth: CGFloat = 204
     static let mainWindowTitlebarHeight: CGFloat = 30
     static let mainWindowTitlebarTitleWidth: CGFloat = 160
     static let mainWindowMinWidth: CGFloat = 1_340
