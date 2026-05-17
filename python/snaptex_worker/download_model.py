@@ -7,6 +7,9 @@ from pathlib import Path
 
 from tqdm.auto import tqdm
 
+from snaptex_worker.runtime_warnings import configure_warning_filters
+
+configure_warning_filters()
 
 MODEL_PROVIDERS = ("unimernet", "paddlepaddle")
 MODEL_VARIANTS = ("tiny", "small", "base")

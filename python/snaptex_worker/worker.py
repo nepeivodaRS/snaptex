@@ -6,28 +6,18 @@ import os
 import sys
 import tempfile
 import traceback
-import warnings
 from pathlib import Path
 
 import yaml
 from PIL import Image, ImageOps, ImageStat
 
+try:
+    from snaptex_worker.runtime_warnings import configure_warning_filters
+except ModuleNotFoundError:
+    from runtime_warnings import configure_warning_filters
+
 os.environ.setdefault("NO_ALBUMENTATIONS_UPDATE", "1")
-warnings.filterwarnings(
-    "ignore",
-    message="The image_processor_class argument is deprecated.*",
-    category=FutureWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="`do_sample` is set to `False`.*",
-    category=UserWarning,
-)
-warnings.filterwarnings(
-    "ignore",
-    message="A new version of Albumentations is available.*",
-    category=UserWarning,
-)
+configure_warning_filters()
 
 
 LOG_VERBOSITY_RANKS = {
