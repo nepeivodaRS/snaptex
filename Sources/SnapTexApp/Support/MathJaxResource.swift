@@ -1,6 +1,8 @@
 import Foundation
 
 enum MathJaxResource {
+    // Preview and export WebViews use the bundled MathJax file so rendering is
+    // deterministic and does not require network access.
     static let inlineScriptTag: String = {
         guard let url = scriptURL,
               let script = try? String(contentsOf: url, encoding: .utf8) else {

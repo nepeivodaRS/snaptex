@@ -70,6 +70,8 @@ def ocr_pass_count(mode):
 
 
 def normalize_model_selection(value):
+    # The Swift side now sends provider/size dictionaries, but older settings
+    # may still contain legacy UniMERNet strings such as "tiny" or "base".
     if value is None:
         return make_model_selection("unimernet", "m")
 
@@ -263,6 +265,8 @@ def preprocess_formula_image(image):
     }
 
     if should_invert_formula_image(rgb_image):
+        # Normalize dark screenshots to black-on-white before OCR so the model
+        # inputs match the light-background path used elsewhere.
         inverted = ImageOps.autocontrast(ImageOps.invert(rgb_image), cutoff=1)
         processed = crop_dark_formula_content(inverted)
         info["inverted"] = True
@@ -450,6 +454,9 @@ class UniMEREngine:
         root_pth = models_dir / f"unimernet_{model_name}.pth"
 
         if root_pth.exists():
+            # Older local setups stored one fine-tuned checkpoint at the runtime
+            # root. Keep that path working while newer downloads live under
+            # provider/size directories.
             data["model"]["model_config"]["model_name"] = str(legacy_model_dir)
             data["model"]["tokenizer_config"] = {"path": str(legacy_model_dir)}
             data["model"]["load_pretrained"] = False
@@ -520,6 +527,9 @@ class PaddleFormulaEngine:
 
         worker_log(log_verbosity, "verbose", f"model load start: {model_name}")
         if model_dir:
+            # PaddleOCR downloads official models under PADDLE_PDX_CACHE_HOME.
+            # Point it at SnapTex's model directory so in-app deletion and
+            # reveal actions operate on the same files PaddleOCR uses.
             cache_home = paddle_cache_home(model_dir)
             cache_home.mkdir(parents=True, exist_ok=True)
             os.environ["PADDLE_PDX_CACHE_HOME"] = str(cache_home)

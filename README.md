@@ -12,7 +12,7 @@
   <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-111111">
   <img alt="SwiftPM" src="https://img.shields.io/badge/SwiftPM-ready-f05138">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0f766e">
-  <img alt="OCR: UniMERNet and PaddlePaddle" src="https://img.shields.io/badge/OCR-UniMERNet%20%2B%20PaddlePaddle-2f6fed">
+  <img alt="OCR: UniMERNet and PaddleOCR" src="https://img.shields.io/badge/OCR-UniMERNet%20%2B%20PaddleOCR-2f6fed">
 </p>
 
 ## Overview
@@ -24,7 +24,7 @@ The app is designed for fast desktop workflows: snip an equation, review the OCR
 ## Features
 
 - Native macOS app with menu bar access and configurable global shortcuts.
-- Local OCR using UniMERNet and PaddlePaddle formula recognition models.
+- Local OCR using formula recognition models from UniMERNet and PaddleOCR.
 - Small, medium, and large model variants with in-app download and deletion controls.
 - Editable LaTeX output with syntax highlighting and rendered MathJax preview.
 - Recognition alternatives, output formatting, and automatic copy support.
@@ -104,7 +104,7 @@ Tests/                   Swift and Python test coverage
 
 ## Credits
 
-SnapTex uses [opendatalab/UniMERNet](https://github.com/opendatalab/UniMERNet), [PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), and [MathJax](https://www.mathjax.org/). Third-party projects retain their own licenses.
+SnapTex uses formula recognition models provided by [opendatalab/UniMERNet](https://github.com/opendatalab/UniMERNet) and [PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR). [MathJax](https://www.mathjax.org/) is bundled locally to render LaTeX previews and formula exports inside the macOS app. Third-party projects and model assets retain their own licenses.
 
 ## License
 

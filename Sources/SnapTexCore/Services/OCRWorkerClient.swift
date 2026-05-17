@@ -72,6 +72,8 @@ public enum OCRWorkerClientError: LocalizedError {
 public final class OCRWorkerClient: @unchecked Sendable {
     public var logHandler: ((String) -> Void)?
 
+    // The worker is a long-lived JSON-lines subprocess. Serialize pipe access so
+    // concurrent recognition requests cannot interleave writes or reads.
     private var configuration: OCRWorkerConfiguration
     private let lock = NSLock()
     private var process: Process?
@@ -167,6 +169,8 @@ public final class OCRWorkerClient: @unchecked Sendable {
             configuration.uniMERNetRuntimePath
         ]
         var environment = ProcessInfo.processInfo.environment
+        // Keep the worker bound to the configured conda environment and avoid
+        // noisy runtime update checks leaking into the app logs.
         environment["PYTHONNOUSERSITE"] = "1"
         environment["NO_ALBUMENTATIONS_UPDATE"] = "1"
         process.environment = environment
@@ -208,6 +212,8 @@ public final class OCRWorkerClient: @unchecked Sendable {
             throw OCRWorkerClientError.missingPipe
         }
 
+        // The Python worker returns one JSON response per newline and stays open
+        // for reuse, so EOF is not a valid response boundary.
         var data = Data()
         while true {
             let byte = outputHandle.readData(ofLength: 1)

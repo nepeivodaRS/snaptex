@@ -251,6 +251,8 @@ private enum StoredHistoryEntryState: Codable {
     var historyEntryState: OCRHistoryEntryState {
         switch self {
         case .recognizing:
+            // A persisted in-flight item means the previous app session ended
+            // before the worker returned.
             return .failed("Recognition interrupted")
         case .recognized:
             return .recognized

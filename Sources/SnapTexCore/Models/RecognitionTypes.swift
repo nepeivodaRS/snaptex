@@ -151,6 +151,9 @@ public struct OCRModelSelection: CaseIterable, Codable, Hashable, Identifiable, 
     }
 
     public var requiresManagedFiles: Bool {
+        // UniMERNet snapshots are installed and detected by SnapTex directly.
+        // PaddleOCR owns its cache layout, so the app verifies its directory
+        // instead of scanning individual weight-file candidates.
         provider == .uniMERNet
     }
 

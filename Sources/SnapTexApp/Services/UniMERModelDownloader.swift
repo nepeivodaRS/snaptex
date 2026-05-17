@@ -57,6 +57,9 @@ struct UniMERModelDownloader: UniMERModelDownloading {
         process.standardError = outputPipe
 
         try process.run()
+        // The Python downloader writes newline-delimited progress events mixed
+        // with normal output; parse JSON lines opportunistically and keep the
+        // full output for error messages.
         let output = readOutput(
             from: outputPipe.fileHandleForReading,
             progressHandler: progressHandler

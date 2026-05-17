@@ -7,6 +7,8 @@ import UniformTypeIdentifiers
 final class AppModel: ObservableObject {
     @Published var settings: AppSettingsSnapshot {
         didSet {
+            // Keep settings-driven side effects centralized so individual
+            // controls only mutate settings.
             settingsStore.save(settings)
             let oldWorkerConfiguration = Self.workerConfiguration(for: oldValue)
             let newWorkerConfiguration = Self.workerConfiguration(for: settings)
@@ -88,6 +90,9 @@ final class AppModel: ObservableObject {
     private var currentImageFingerprint: String?
     private var currentBodyLatex = ""
     private var previewUpdateTask: Task<Void, Never>?
+    // Recognition can be triggered from capture, paste, drag and drop, retry,
+    // or a pending history item. Count active jobs so one finished job does not
+    // clear the processing state for another.
     private var activeRecognitionCount = 0
     private let pendingHistoryTitle = "Recognizing..."
 
@@ -876,6 +881,8 @@ final class AppModel: ObservableObject {
         model: UniMERModelVariant,
         folderID: HistoryFolder.ID? = nil
     ) -> OCRHistoryEntry.ID {
+        // Re-recognizing the same image should update the existing history item
+        // instead of creating duplicates, while preserving folder placement.
         let existingIndex = OCRHistoryPolicy.replacementIndex(
             in: history.map(\.imageFingerprint),
             for: imageFingerprint
@@ -1189,6 +1196,8 @@ final class AppModel: ObservableObject {
                 minimumVerbosity: .verbose
             )
             let outputFormat = entryID.map { outputFormatForHistoryEntry(id: $0) } ?? settings.outputFormat
+            // Build display state separately from persistence so history and the
+            // active editor stay consistent even if the user changed selection.
             let display = makeRecognitionDisplay(
                 predictions: result.alternatives.isEmpty ? [result.latex] : result.alternatives,
                 outputFormat: outputFormat
@@ -1258,6 +1267,9 @@ final class AppModel: ObservableObject {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
 
+        // Prefer explicit runtime paths, then installed app resources and common
+        // development checkouts. The worker needs UniMERNet Python code and its
+        // validation configs, not just the downloaded model weights.
         var candidates: [URL] = []
         for key in ["SNAPTEX_UNIMERNET_RUNTIME_DIR", "UNIMERNET_RUNTIME_DIR"] {
             if let path = environment[key]?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -1536,6 +1548,8 @@ final class AppModel: ObservableObject {
     private func schedulePreviewUpdate() {
         let source = latexOutput
         previewUpdateTask?.cancel()
+        // Debounce preview validation while the user edits LaTeX. Only the
+        // latest editor content is allowed to update the rendered preview.
         previewUpdateTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 250_000_000)
             guard !Task.isCancelled else {
@@ -1691,6 +1705,8 @@ final class AppModel: ObservableObject {
     }
 
     private func removeOwnedImageFiles(for entries: [OCRHistoryEntry]) {
+        // Temporary captures can be referenced by replacement entries. Check the
+        // remaining history before deleting files owned by removed entries.
         let preservedURLs = Set(history.compactMap(\.imageURL))
         for entry in entries where entry.ownsImageFile {
             guard let imageURL = entry.imageURL,

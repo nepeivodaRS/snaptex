@@ -24,6 +24,9 @@ enum FormulaExportHTML {
           <script>
             window.snaptexFormulaReady = false;
 
+            // FormulaImageExporter polls this hook after MathJax typesets. The
+            // returned bounds let WebKit snapshots crop to the rendered formula
+            // rather than the larger offscreen viewport.
             window.snaptexFormulaBounds = function() {
               if (!window.snaptexFormulaReady) {
                 return { ready: false };

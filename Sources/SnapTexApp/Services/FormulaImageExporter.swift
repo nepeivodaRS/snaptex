@@ -49,6 +49,8 @@ final class FormulaImageExporter {
     }
 
     private func makeHostWindow(for webView: WKWebView) -> NSWindow {
+        // WKWebView snapshots are more reliable after the view is attached to a
+        // window, even when the window is borderless and never shown.
         let window = NSWindow(
             contentRect: webView.frame,
             styleMask: .borderless,
@@ -111,6 +113,8 @@ final class FormulaImageExporter {
     }
 
     private func visibleSnapshotImage(from webView: WKWebView, cropRect: CGRect) async throws -> NSImage {
+        // MathJax can report layout before WebKit has painted the SVG/HTML
+        // content. Retry snapshots until the bitmap contains visible pixels.
         for _ in 0..<12 {
             let image = try await snapshotImage(from: webView, cropRect: cropRect)
             if imageHasVisibleContent(image) {
@@ -169,6 +173,8 @@ final class FormulaImageExporter {
             throw FormulaExportError.renderFailed
         }
 
+        // Export EPS without an external vector pipeline by rasterizing the
+        // rendered formula and compacting same-gray horizontal pixel runs.
         let bitmap = NSBitmapImageRep(cgImage: cgImage)
         let width = bitmap.pixelsWide
         let height = bitmap.pixelsHigh

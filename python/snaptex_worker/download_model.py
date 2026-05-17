@@ -155,6 +155,8 @@ def download_paddle_model(variant, models_dir, progress_json=False):
     cache_home = Path(models_dir).expanduser().resolve() / "paddlepaddle"
     target = cache_home / "official_models" / model_name
     cache_home.mkdir(parents=True, exist_ok=True)
+    # PaddleOCR owns the actual download. SnapTex steers its cache location so
+    # the macOS app can discover, reveal, and delete the installed model files.
     os.environ["PADDLE_PDX_CACHE_HOME"] = str(cache_home)
     remove_invalid_paddle_cache(target)
 
