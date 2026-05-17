@@ -30,7 +30,6 @@ The app is designed for fast desktop workflows: snip an equation, review the OCR
 - Recognition alternatives, output formatting, and automatic copy support.
 - Formula export from the rendered preview.
 - Persistent history with folders, sorting, limits, and stored capture images.
-- Settings and logs for model paths, output behavior, shortcuts, typography, and runtime diagnostics.
 
 ## Requirements
 
