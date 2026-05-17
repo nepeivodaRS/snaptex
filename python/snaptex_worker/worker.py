@@ -508,7 +508,26 @@ class PaddleFormulaEngine:
         )
         model = self._load_model(model_name, log_verbosity, model_dir=model_dir)
 
-        output = model.predict(input=image_path, batch_size=1)
+        source_image = Image.open(image_path)
+        raw_image, preprocessing = preprocess_formula_image(source_image)
+        worker_log(
+            log_verbosity,
+            "debug",
+            "preprocess: "
+            f"input={preprocessing['input_size'][0]}x{preprocessing['input_size'][1]} {preprocessing['input_mode']}, "
+            f"inverted={preprocessing['inverted']}, cropped={preprocessing['cropped']}, "
+            f"output={preprocessing['output_size'][0]}x{preprocessing['output_size'][1]}",
+        )
+
+        temporary = tempfile.NamedTemporaryFile(suffix="-snaptex-paddle.png", delete=False)
+        temporary_path = Path(temporary.name)
+        temporary.close()
+        try:
+            raw_image.save(temporary_path, format="PNG")
+            output = model.predict(input=str(temporary_path), batch_size=1)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+
         alternatives = unique(paddle_prediction_strings(output))
         worker_log(log_verbosity, "verbose", f"predict complete: alternatives={len(alternatives)}")
         return {

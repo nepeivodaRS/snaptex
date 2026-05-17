@@ -8,7 +8,7 @@ from pathlib import Path
 import tempfile
 import unittest
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageStat
 import yaml
 
 from snaptex_worker.worker import PaddleFormulaEngine, UniMEREngine, handle_request, normalize_model_selection
@@ -205,6 +205,40 @@ class WorkerRequestTests(unittest.TestCase):
                 },
                 calls[0],
             )
+
+    def test_paddle_predict_preprocesses_dark_formula_image_before_recognition(self):
+        class FakePaddleModel:
+            def __init__(self):
+                self.input_path = None
+                self.input_mean = None
+
+            def predict(self, input, batch_size=1):
+                self.input_path = input
+                with Image.open(input) as image:
+                    self.input_mean = ImageStat.Stat(image.convert("L")).mean[0]
+                return [{"rec_formula": "x+y"}]
+
+        image = Image.new("RGB", (120, 48), "black")
+        draw = ImageDraw.Draw(image)
+        draw.line((16, 24, 104, 24), fill="white", width=3)
+        draw.text((36, 12), "x+y", fill="white")
+
+        with tempfile.NamedTemporaryFile(suffix=".png") as handle:
+            image.save(handle.name)
+            fake_model = FakePaddleModel()
+            engine = PaddleFormulaEngine()
+            engine._load_model = lambda *_args, **_kwargs: fake_model
+
+            result = engine.predict(
+                handle.name,
+                {"model_name": "PP-FormulaNet_plus-S", "response": {"provider": "paddlepaddle", "size": "s"}},
+                "fast",
+                True,
+            )
+
+        self.assertEqual("x+y", result["prediction"])
+        self.assertNotEqual(handle.name, fake_model.input_path)
+        self.assertGreater(fake_model.input_mean, 220)
 
     def test_config_for_accepts_huggingface_pytorch_model_pth(self):
         with tempfile.TemporaryDirectory() as temporary:
