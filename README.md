@@ -27,6 +27,8 @@ SnapTex is a local macOS app for capturing equations from your screen and conver
 - Keep recent snapshots in a persistent history.
 - Manage local OCR models from inside the app.
 
+![SnapTex demo](Sources/SnapTexApp/Resources/snaptex-demo.gif)
+
 ## Models
 
 SnapTex supports local formula recognition with:
