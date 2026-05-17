@@ -104,7 +104,7 @@ Tests/                   Swift and Python test coverage
 
 ## Credits
 
-SnapTex uses [OpenDataLab UniMERNet](https://github.com/opendatalab/UniMERNet), [PaddlePaddle](https://github.com/PaddlePaddle), [PP-FormulaNet_plus](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-L), and [MathJax](https://www.mathjax.org/). Third-party projects retain their own licenses.
+SnapTex uses [opendatalab/UniMERNet](https://github.com/opendatalab/UniMERNet), [PaddlePaddle/PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), and [MathJax](https://www.mathjax.org/). Third-party projects retain their own licenses.
 
 ## License
 
