@@ -545,9 +545,198 @@ final class AppLayoutMetricsTests: XCTestCase {
     func testHistoryThumbnailUsesPersistedImageFallback() throws {
         let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
         let historyRow = try viewSource(named: "HistoryRow", in: historyView)
+        guard let thumbnailImage = privateStructSource(named: "HistoryThumbnailImage", in: historyView) else {
+            XCTFail("History thumbnail fallback should live outside the row body")
+            return
+        }
 
-        XCTAssertTrue(historyRow.contains("entry.displayImage"))
+        XCTAssertTrue(historyRow.contains("HistoryThumbnailImage(entry: entry)"))
+        XCTAssertTrue(thumbnailImage.contains(".task(id: imageSourceID)"))
+        XCTAssertTrue(thumbnailImage.contains("Data(contentsOf: url)"))
+        XCTAssertTrue(thumbnailImage.contains("NSImage(data: data)"))
+        XCTAssertFalse(historyRow.contains("entry.displayImage"))
         XCTAssertFalse(historyRow.contains("if let image = entry.image {"))
+    }
+
+    func testHistoryThumbnailCachesPersistedImagesAcrossRowRecycling() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        guard let thumbnailImage = privateStructSource(named: "HistoryThumbnailImage", in: historyView) else {
+            XCTFail("History thumbnail fallback should live outside the row body")
+            return
+        }
+
+        XCTAssertTrue(historyView.contains("private final class HistoryThumbnailImageCache"))
+        XCTAssertTrue(thumbnailImage.contains("HistoryThumbnailImageCache.shared.image(for: imageCacheKey)"))
+        XCTAssertTrue(thumbnailImage.contains("HistoryThumbnailImageCache.shared.insert(loadedImage, for: imageCacheKey)"))
+
+        guard let cacheLookup = thumbnailImage.range(of: "HistoryThumbnailImageCache.shared.image(for: imageCacheKey)"),
+              let diskLoad = thumbnailImage.range(of: "Data(contentsOf: url)") else {
+            XCTFail("History thumbnails should check cache before reading from disk")
+            return
+        }
+        XCTAssertLessThan(cacheLookup.lowerBound, diskLoad.lowerBound)
+    }
+
+    func testHistorySidebarPreloadsAllCaptureAndFolderThumbnails() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+
+        XCTAssertTrue(historyView.contains(".task(id: historyThumbnailPreloadID)"))
+        XCTAssertTrue(historyView.contains("await HistoryThumbnailImageCache.shared.preload(entries: historyThumbnailPreloadEntries)"))
+        XCTAssertTrue(historyView.contains("Array(visibleHistory.prefix(40))"))
+        XCTAssertTrue(historyView.contains("case .folder:\n            return visibleHistory"))
+        XCTAssertTrue(historyView.contains("func preload(entries: [OCRHistoryEntry]) async"))
+    }
+
+    func testHistoryRowsDisableHoverEffectsWhileScrolling() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        let historyRow = try viewSource(named: "HistoryRow", in: historyView)
+        let hoverEffect = try viewSource(named: "HistoryDepthCardHoverEffect", in: historyView)
+        let trackingArea = try viewSource(named: "HistoryCardHoverTrackingArea", in: historyView)
+
+        XCTAssertTrue(historyView.contains("@State private var isHistoryScrolling = false"))
+        XCTAssertTrue(historyView.contains("HistoryScrollActivityObserver("))
+        XCTAssertTrue(historyView.contains("onScrollActivity: handleHistoryScrollActivity"))
+        XCTAssertTrue(historyView.contains("isScrolling: isHistoryScrolling"))
+        XCTAssertTrue(historyRow.contains("let isScrolling: Bool"))
+        XCTAssertTrue(historyRow.contains("HistoryCardHoverTrackingArea("))
+        XCTAssertTrue(historyRow.contains("isEnabled: !isScrolling"))
+        XCTAssertTrue(historyRow.contains("guard !isScrolling else"))
+        XCTAssertTrue(historyRow.contains("isEnabled: !isScrolling"))
+        XCTAssertTrue(trackingArea.contains("let isEnabled: Bool"))
+        XCTAssertTrue(trackingArea.contains("guard acceptsHoverEvents else"))
+        XCTAssertTrue(hoverEffect.contains("let isEnabled: Bool"))
+        XCTAssertTrue(hoverEffect.contains("if isEnabled {"))
+        XCTAssertTrue(hoverEffect.contains("} else {\n            content"))
+        XCTAssertTrue(historyView.contains("private struct HistoryScrollActivityObserver: NSViewRepresentable"))
+        XCTAssertTrue(historyView.contains("NSView.boundsDidChangeNotification"))
+        XCTAssertTrue(historyView.contains("transaction.disablesAnimations = true"))
+    }
+
+    func testHistoryScrollDetectionUsesDebouncedScrollPositionChanges() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        guard let scrollObserver = privateStructSource(named: "HistoryScrollActivityObserver", in: historyView) else {
+            XCTFail("History should observe scroll activity")
+            return
+        }
+
+        XCTAssertTrue(scrollObserver.contains("NSView.boundsDidChangeNotification"))
+        XCTAssertTrue(scrollObserver.contains("NSScrollView.willStartLiveScrollNotification"))
+        XCTAssertTrue(scrollObserver.contains("NSScrollView.didLiveScrollNotification"))
+        XCTAssertTrue(scrollObserver.contains("NSScrollView.didEndLiveScrollNotification"))
+        XCTAssertTrue(scrollObserver.contains("handleScrollBoundsChanged()"))
+        XCTAssertTrue(scrollObserver.contains("scheduleScrollEnd(after:"))
+        XCTAssertTrue(scrollObserver.contains("notifyScrollActivity(.began)"))
+        XCTAssertTrue(scrollObserver.contains("notifyScrollActivity(.ended)"))
+        XCTAssertFalse(scrollObserver.contains("NSEvent.addLocalMonitorForEvents"))
+        XCTAssertFalse(scrollObserver.contains("scrollWheel"))
+        XCTAssertFalse(scrollObserver.contains("isWheelScrolling"))
+    }
+
+    func testHistoryScrollContentHeightIsFixedByItemCount() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+
+        XCTAssertTrue(historyView.contains("ScrollView(.vertical)"))
+        XCTAssertTrue(historyView.contains("LazyVStack(spacing: 0)"))
+        XCTAssertTrue(historyView.contains("private let historyRowHeight: CGFloat"))
+        XCTAssertTrue(historyView.contains("private func historyScrollContentHeight(for entries: [OCRHistoryEntry]) -> CGFloat"))
+        XCTAssertTrue(historyView.contains("CGFloat(entries.count) * historyRowHeight"))
+        XCTAssertTrue(historyView.contains(".frame(height: historyScrollContentHeight(for: visibleHistory), alignment: .top)"))
+        XCTAssertFalse(historyView.contains("List {"))
+        XCTAssertFalse(historyView.contains(".listRowInsets("))
+    }
+
+    func testHistoryScrollViewDisablesElasticOverscroll() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        guard let scrollObserver = privateStructSource(named: "HistoryScrollActivityObserver", in: historyView) else {
+            XCTFail("History should configure its backing scroll view")
+            return
+        }
+
+        XCTAssertTrue(scrollObserver.contains("configureScrollView(scrollView)"))
+        XCTAssertTrue(scrollObserver.contains("scrollView.verticalScrollElasticity = .none"))
+        XCTAssertTrue(scrollObserver.contains("scrollView.horizontalScrollElasticity = .none"))
+        XCTAssertTrue(scrollObserver.contains("clampObservedScrollPosition()"))
+        XCTAssertTrue(scrollObserver.contains("clipView.scroll(to:"))
+        XCTAssertTrue(scrollObserver.contains("scrollView.reflectScrolledClipView(clipView)"))
+    }
+
+    func testHistorySelectionScrollOnlyRevealsHiddenRows() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        guard let scrollObserver = privateStructSource(named: "HistoryScrollActivityObserver", in: historyView) else {
+            XCTFail("History should configure selected row visibility from its backing scroll view")
+            return
+        }
+
+        XCTAssertFalse(historyView.contains("ScrollViewReader"))
+        XCTAssertFalse(historyView.contains("proxy.scrollTo"))
+        XCTAssertFalse(historyView.contains("anchor: .top"))
+        XCTAssertTrue(historyView.contains("selectedIndex: selectedHistoryRowIndex(in: visibleHistory)"))
+        XCTAssertTrue(historyView.contains("selectionScrollToken: historySelectionScrollToken(for: visibleHistory)"))
+        XCTAssertTrue(scrollObserver.contains("scrollSelectedRowIntoViewIfNeeded()"))
+        XCTAssertTrue(scrollObserver.contains("HistoryScrollVisibility.targetOriginY"))
+        XCTAssertTrue(scrollObserver.contains("lastHandledSelectionScrollToken"))
+    }
+
+    func testHistoryCardHoverTrackingRemovesTrackingAreaWhileScrolling() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        let trackingView = try viewSource(named: "HistoryCardHoverTrackingArea", in: historyView)
+        guard let updateTrackingAreasRange = trackingView.range(of: "override func updateTrackingAreas()") else {
+            XCTFail("Tracking view should manage tracking areas")
+            return
+        }
+        let updateTrackingAreasSource = trackingView[updateTrackingAreasRange.lowerBound...]
+
+        XCTAssertTrue(trackingView.contains("didSet"))
+        XCTAssertTrue(updateTrackingAreasSource.contains("guard acceptsHoverEvents else {\n                return\n            }"))
+        XCTAssertTrue(updateTrackingAreasSource.contains("addTrackingArea("))
+    }
+
+    func testHistoryRowControlsRemoveHoverTrackingWhileScrolling() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        let historyRow = try viewSource(named: "HistoryRow", in: historyView)
+        let actionButton = try viewSource(named: "HistoryActionButton", in: historyView)
+        let textActionButton = try viewSource(named: "HistoryTextActionButton", in: historyView)
+        guard let hoverTracking = privateStructSource(named: "HistoryControlHoverTrackingArea", in: historyView) else {
+            XCTFail("History row controls should use removable hover tracking")
+            return
+        }
+        let folderBridge = try viewSource(named: "FolderAssignmentMenuBridge", in: historyView)
+
+        XCTAssertTrue(historyRow.contains("HistoryFolderAssignmentMenu("))
+        XCTAssertTrue(historyRow.contains("isHoverEnabled: !isScrolling"))
+        XCTAssertTrue(actionButton.contains("var isHoverEnabled = true"))
+        XCTAssertTrue(actionButton.contains("HistoryControlHoverTrackingArea("))
+        XCTAssertFalse(actionButton.contains(".onHover"))
+        XCTAssertTrue(textActionButton.contains("var isHoverEnabled = true"))
+        XCTAssertTrue(textActionButton.contains("HistoryControlHoverTrackingArea("))
+        XCTAssertFalse(textActionButton.contains(".onHover"))
+        XCTAssertTrue(hoverTracking.contains("guard acceptsHoverEvents else {\n                return\n            }"))
+        XCTAssertTrue(folderBridge.contains("let isHoverEnabled: Bool"))
+        XCTAssertTrue(folderBridge.contains("guard acceptsHoverEvents else {\n                return\n            }"))
+    }
+
+    func testHistoryRowAvoidsPerBodyDateFormatterConstruction() throws {
+        let historyEntry = try sourceFile("Sources/SnapTexApp/Models/OCRHistoryEntry.swift")
+        guard let timeLabelStart = historyEntry.range(of: "var timeLabel: String")?.lowerBound else {
+            XCTFail("History entry should expose a time label")
+            return
+        }
+        let timeLabelRemainder = historyEntry[timeLabelStart...]
+        let timeLabelEnd = timeLabelRemainder.range(
+            of: "\n\n    var ",
+            range: timeLabelRemainder.index(after: timeLabelStart)..<timeLabelRemainder.endIndex
+        )?.lowerBound ?? timeLabelRemainder.endIndex
+        let timeLabelSource = timeLabelRemainder[..<timeLabelEnd]
+
+        XCTAssertTrue(historyEntry.contains("private static let timeLabelFormatter"))
+        XCTAssertFalse(timeLabelSource.contains("DateFormatter()"))
+    }
+
+    func testHistoryListAvoidsPerRowFileSystemChecksDuringBodyConstruction() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+
+        XCTAssertTrue(historyView.contains("canRevealImage: entry.imageURL != nil"))
+        XCTAssertFalse(historyView.contains("canRevealImage: model.canRevealHistoryImage(entry)"))
     }
 
     func testSelectedHistoryRowKeepsIdleHoverMotionAndBrightensThumbnail() throws {
@@ -565,8 +754,8 @@ final class AppLayoutMetricsTests: XCTestCase {
         )?.lowerBound ?? thumbnailRemainder.endIndex
         let thumbnailSource = thumbnailRemainder[..<thumbnailEnd]
 
-        XCTAssertTrue(historyRow.contains("selectedFloatStrength: selectedFloatStrength"))
-        XCTAssertTrue(historyRow.contains("selectedFloatProgress: selectedFloatProgress"))
+        XCTAssertTrue(historyRow.contains("selectedFloatStrength: renderedSelectedFloatStrength"))
+        XCTAssertTrue(historyRow.contains("selectedFloatProgress: renderedSelectedFloatProgress"))
         XCTAssertTrue(historyRow.contains("updateHoverEffect(isActive: isSelected || $0)"))
         XCTAssertTrue(historyRow.contains("updateHoverEffect(isActive: isHovered || $0)"))
         XCTAssertTrue(historyRow.contains(".onChange(of: isSelected)"))
@@ -578,7 +767,7 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyRow.contains("selectedFloatStrength = isSelected ? 1 : 0"))
         XCTAssertTrue(historyRow.contains("selectedIdleStartDate = Date()"))
         XCTAssertTrue(historyRow.contains(".easeInOut(duration: selectedIdleHoverAnimationDuration).repeatForever(autoreverses: true)"))
-        XCTAssertTrue(historyRow.contains("selectedIdleStrength: selectedIdleStrength"))
+        XCTAssertTrue(historyRow.contains("selectedIdleStrength: renderedSelectedIdleStrength"))
         XCTAssertTrue(historyRow.contains("selectedIdleStartDate: selectedIdleStartDate"))
         XCTAssertTrue(historyRow.contains("cardShadowRadius"))
         XCTAssertTrue(historyRow.contains("cardShadowY"))
@@ -1077,6 +1266,15 @@ final class AppLayoutMetricsTests: XCTestCase {
     private func viewSource(named viewName: String, in source: String) throws -> Substring {
         guard let start = source.range(of: "private struct \(viewName)")?.lowerBound else {
             throw XCTSkip("Missing view source for \(viewName)")
+        }
+        let remainder = source[start...]
+        let nextView = remainder.range(of: "\nprivate struct ", options: [], range: remainder.index(after: start)..<remainder.endIndex)
+        return remainder[..<(nextView?.lowerBound ?? remainder.endIndex)]
+    }
+
+    private func privateStructSource(named viewName: String, in source: String) -> Substring? {
+        guard let start = source.range(of: "private struct \(viewName)")?.lowerBound else {
+            return nil
         }
         let remainder = source[start...]
         let nextView = remainder.range(of: "\nprivate struct ", options: [], range: remainder.index(after: start)..<remainder.endIndex)

@@ -26,6 +26,13 @@ struct OCRHistoryEntry: Identifiable, Equatable {
     let folderID: HistoryFolder.ID?
     let fixedRenderedPreviewFontSize: Int?
 
+    private static let timeLabelFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.timeStyle = .short
+        formatter.dateStyle = .none
+        return formatter
+    }()
+
     init(
         id: UUID,
         title: String,
@@ -63,14 +70,7 @@ struct OCRHistoryEntry: Identifiable, Equatable {
     }
 
     var timeLabel: String {
-        let formatter = DateFormatter()
-        formatter.timeStyle = .short
-        formatter.dateStyle = .none
-        return formatter.string(from: timestamp)
-    }
-
-    var displayImage: NSImage? {
-        image ?? imageURL.flatMap(NSImage.init(contentsOf:))
+        Self.timeLabelFormatter.string(from: timestamp)
     }
 
     func renamed(to title: String) -> OCRHistoryEntry {

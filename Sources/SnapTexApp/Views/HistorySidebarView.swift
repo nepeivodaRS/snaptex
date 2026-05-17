@@ -2,10 +2,18 @@ import AppKit
 import SwiftUI
 
 private let historySidebarHorizontalPadding: CGFloat = 12
+private let historyRowControlSize: CGFloat = 24
+private let historyRowOuterVerticalPadding: CGFloat = 5
+private let historyRowInnerPadding: CGFloat = 6
+private let historyRowContentSpacing: CGFloat = 6
+private let historyThumbnailHeight: CGFloat = 64
+private let historyRowContentHeight: CGFloat = historyRowControlSize + historyRowContentSpacing + historyThumbnailHeight + historyRowInnerPadding * 2
+private let historyRowHeight: CGFloat = historyRowContentHeight + historyRowOuterVerticalPadding * 2
 
 struct HistorySidebarView: View {
     @ObservedObject var model: AppModel
     @State private var renamingFolderID: HistoryFolder.ID?
+    @State private var isHistoryScrolling = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -32,18 +40,20 @@ struct HistorySidebarView: View {
                 )
                 Spacer()
             } else {
-                ScrollViewReader { proxy in
-                    List {
-                        ForEach(model.visibleHistory) { entry in
+                let visibleHistory = model.visibleHistory
+                ScrollView(.vertical) {
+                    LazyVStack(spacing: 0) {
+                        ForEach(visibleHistory) { entry in
                             HistoryRow(
                                 entry: entry,
                                 isSelected: entry.id == model.selectedHistoryID,
+                                isScrolling: isHistoryScrolling,
                                 titleFontSize: model.settings.historyTitleFontSize,
                                 metadataFontSize: model.settings.metadataFontSize,
                                 folderBadgeColor: model.historyFolderColor(for: entry.folderID),
                                 folders: model.historyFolders,
                                 copy: { model.copyHistoryEntry(entry) },
-                                canRevealImage: model.canRevealHistoryImage(entry),
+                                canRevealImage: entry.imageURL != nil,
                                 revealImage: { model.revealHistoryImageInFinder(entry) },
                                 rename: { model.renameHistoryEntry(entry, title: $0) },
                                 moveToFolder: { model.moveHistoryEntry(entry, to: $0) },
@@ -56,29 +66,27 @@ struct HistorySidebarView: View {
                                 delete: { model.deleteHistoryEntry(entry) },
                                 reopen: { model.reopenHistoryEntry(entry) }
                             )
+                            .frame(height: historyRowContentHeight, alignment: .top)
+                            .padding(.horizontal, historySidebarHorizontalPadding)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: historyRowHeight, alignment: .center)
                             .id(entry.id)
-                            .listRowInsets(EdgeInsets(
-                                top: 5,
-                                leading: historySidebarHorizontalPadding,
-                                bottom: 5,
-                                trailing: historySidebarHorizontalPadding
-                            ))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
                         }
                     }
-                    .listStyle(.sidebar)
-                    .scrollContentBackground(.hidden)
-                    .background(AppTheme.windowBackground)
-                    .onAppear {
-                        scrollToSelectedHistoryItem(proxy)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: historyScrollContentHeight(for: visibleHistory), alignment: .top)
+                    .background {
+                        HistoryScrollActivityObserver(
+                            onScrollActivity: handleHistoryScrollActivity,
+                            selectedIndex: selectedHistoryRowIndex(in: visibleHistory),
+                            rowHeight: historyRowHeight,
+                            selectionScrollToken: historySelectionScrollToken(for: visibleHistory)
+                        )
                     }
-                    .onChange(of: model.selectedHistoryID) { _ in
-                        scrollToSelectedHistoryItem(proxy)
-                    }
-                    .onChange(of: model.visibleHistory.first?.id) { _ in
-                        scrollToSelectedHistoryItem(proxy)
-                    }
+                }
+                .background(AppTheme.windowBackground)
+                .task(id: historyThumbnailPreloadID) {
+                    await HistoryThumbnailImageCache.shared.preload(entries: historyThumbnailPreloadEntries)
                 }
             }
         }
@@ -115,15 +123,396 @@ struct HistorySidebarView: View {
         }
     }
 
-    private func scrollToSelectedHistoryItem(_ proxy: ScrollViewProxy) {
-        guard let id = model.selectedHistoryID ?? model.visibleHistory.first?.id else {
+    private var historyThumbnailPreloadEntries: [OCRHistoryEntry] {
+        let visibleHistory = model.visibleHistory
+        switch model.selectedHistoryScope {
+        case .all:
+            return Array(visibleHistory.prefix(40))
+        case .folder:
+            return visibleHistory
+        }
+    }
+
+    private var historyThumbnailPreloadID: String {
+        historyThumbnailPreloadEntries
+            .map { "\($0.id.uuidString):\($0.imageURL?.path ?? ""):\($0.image != nil)" }
+            .joined(separator: "|")
+    }
+
+    private func historyScrollContentHeight(for entries: [OCRHistoryEntry]) -> CGFloat {
+        CGFloat(entries.count) * historyRowHeight
+    }
+
+    private func selectedHistoryRowIndex(in entries: [OCRHistoryEntry]) -> Int? {
+        guard let selectedHistoryID = model.selectedHistoryID else {
+            return entries.isEmpty ? nil : 0
+        }
+
+        return entries.firstIndex { $0.id == selectedHistoryID }
+    }
+
+    private func historySelectionScrollToken(for entries: [OCRHistoryEntry]) -> String {
+        let selectedID = model.selectedHistoryID ?? entries.first?.id
+        return [
+            selectedID?.uuidString ?? "none",
+            "\(selectedHistoryRowIndex(in: entries) ?? -1)",
+            entries.first?.id.uuidString ?? "none",
+            entries.last?.id.uuidString ?? "none",
+            "\(entries.count)"
+        ].joined(separator: ":")
+    }
+
+    @MainActor
+    private func handleHistoryScrollActivity(_ activity: HistoryScrollActivity) {
+        switch activity {
+        case .began:
+            setHistoryScrolling(true)
+        case .ended:
+            setHistoryScrolling(false)
+        }
+    }
+
+    @MainActor
+    private func setHistoryScrolling(_ isActive: Bool) {
+        guard isHistoryScrolling != isActive else {
             return
         }
 
-        DispatchQueue.main.async {
-            withAnimation(.easeOut(duration: 0.18)) {
-                proxy.scrollTo(id, anchor: .top)
+        var transaction = Transaction()
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            isHistoryScrolling = isActive
+        }
+    }
+}
+
+private enum HistoryScrollActivity {
+    case began
+    case ended
+}
+
+private enum HistoryScrollVisibility {
+    static func targetOriginY(
+        selectedIndex: Int,
+        rowHeight: CGFloat,
+        visibleBounds: CGRect,
+        documentBounds: CGRect,
+        isFlipped: Bool
+    ) -> CGFloat? {
+        guard selectedIndex >= 0,
+              rowHeight > 0,
+              visibleBounds.height > 0 else {
+            return nil
+        }
+
+        let rowMinY: CGFloat
+        let rowMaxY: CGFloat
+        if isFlipped {
+            rowMinY = documentBounds.minY + CGFloat(selectedIndex) * rowHeight
+            rowMaxY = rowMinY + rowHeight
+        } else {
+            rowMaxY = documentBounds.maxY - CGFloat(selectedIndex) * rowHeight
+            rowMinY = rowMaxY - rowHeight
+        }
+
+        if rowMinY >= visibleBounds.minY,
+           rowMaxY <= visibleBounds.maxY {
+            return nil
+        }
+
+        let targetY: CGFloat
+        if rowMinY < visibleBounds.minY {
+            targetY = rowMinY
+        } else {
+            targetY = rowMaxY - visibleBounds.height
+        }
+
+        return clampedOriginY(targetY, visibleHeight: visibleBounds.height, documentBounds: documentBounds)
+    }
+
+    static func clampedOriginY(
+        _ originY: CGFloat,
+        visibleHeight: CGFloat,
+        documentBounds: CGRect
+    ) -> CGFloat {
+        let maximumY = max(documentBounds.minY, documentBounds.maxY - visibleHeight)
+        return min(max(originY, documentBounds.minY), maximumY)
+    }
+}
+
+private struct HistoryScrollActivityObserver: NSViewRepresentable {
+    let onScrollActivity: @MainActor (HistoryScrollActivity) -> Void
+    let selectedIndex: Int?
+    let rowHeight: CGFloat
+    let selectionScrollToken: String
+
+    func makeNSView(context: Context) -> ObserverView {
+        let view = ObserverView()
+        view.update(
+            onScrollActivity: onScrollActivity,
+            selectedIndex: selectedIndex,
+            rowHeight: rowHeight,
+            selectionScrollToken: selectionScrollToken
+        )
+        return view
+    }
+
+    func updateNSView(_ view: ObserverView, context: Context) {
+        view.update(
+            onScrollActivity: onScrollActivity,
+            selectedIndex: selectedIndex,
+            rowHeight: rowHeight,
+            selectionScrollToken: selectionScrollToken
+        )
+    }
+
+    final class ObserverView: NSView {
+        var onScrollActivity: (@MainActor (HistoryScrollActivity) -> Void)?
+        var selectedIndex: Int?
+        var rowHeight = historyRowHeight
+        var selectionScrollToken = ""
+
+        private weak var observedScrollView: NSScrollView?
+        private weak var observedClipView: NSClipView?
+        private var boundsObserver: NSObjectProtocol?
+        private var scrollViewObservers: [NSObjectProtocol] = []
+        private var scrollEndWorkItem: DispatchWorkItem?
+        private var isScrolling = false
+        private var isClampingScrollPosition = false
+        private var lastHandledSelectionScrollToken: String?
+        private let scrollEndDebounce: TimeInterval = 0.18
+
+        deinit {
+            removeObservers()
+        }
+
+        override func viewDidMoveToSuperview() {
+            super.viewDidMoveToSuperview()
+            installAfterLayout()
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            installAfterLayout()
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
+        }
+
+        func update(
+            onScrollActivity: @escaping @MainActor (HistoryScrollActivity) -> Void,
+            selectedIndex: Int?,
+            rowHeight: CGFloat,
+            selectionScrollToken: String
+        ) {
+            self.onScrollActivity = onScrollActivity
+            self.selectedIndex = selectedIndex
+            self.rowHeight = rowHeight
+            self.selectionScrollToken = selectionScrollToken
+            installIfPossible()
+            scrollSelectedRowIntoViewIfNeeded()
+        }
+
+        func installIfPossible() {
+            guard let scrollView = nearestScrollView else {
+                return
             }
+
+            configureScrollView(scrollView)
+            clampScrollPosition(scrollView)
+
+            let clipView = scrollView.contentView
+            guard observedScrollView !== scrollView || observedClipView !== clipView else {
+                return
+            }
+
+            removeObservers()
+            observedScrollView = scrollView
+            observedClipView = clipView
+            clipView.postsBoundsChangedNotifications = true
+            boundsObserver = NotificationCenter.default.addObserver(
+                forName: NSView.boundsDidChangeNotification,
+                object: clipView,
+                queue: .main
+            ) { [weak self] _ in
+                self?.handleScrollBoundsChanged()
+            }
+            installLiveScrollObservers(for: scrollView)
+        }
+
+        private func configureScrollView(_ scrollView: NSScrollView) {
+            scrollView.verticalScrollElasticity = .none
+            scrollView.horizontalScrollElasticity = .none
+        }
+
+        private func installAfterLayout() {
+            DispatchQueue.main.async { [weak self] in
+                self?.installIfPossible()
+                self?.scrollSelectedRowIntoViewIfNeeded()
+            }
+        }
+
+        private func removeObservers() {
+            if let boundsObserver {
+                NotificationCenter.default.removeObserver(boundsObserver)
+            }
+            for observer in scrollViewObservers {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            scrollEndWorkItem?.cancel()
+            boundsObserver = nil
+            scrollViewObservers = []
+            scrollEndWorkItem = nil
+            isScrolling = false
+            lastHandledSelectionScrollToken = nil
+            observedScrollView = nil
+            observedClipView = nil
+        }
+
+        private func installLiveScrollObservers(for scrollView: NSScrollView) {
+            let notificationCenter = NotificationCenter.default
+            scrollViewObservers = [
+                notificationCenter.addObserver(
+                    forName: NSScrollView.willStartLiveScrollNotification,
+                    object: scrollView,
+                    queue: .main
+                ) { [weak self] _ in
+                    self?.beginScrollActivity()
+                },
+                notificationCenter.addObserver(
+                    forName: NSScrollView.didLiveScrollNotification,
+                    object: scrollView,
+                    queue: .main
+                ) { [weak self] _ in
+                    self?.handleScrollBoundsChanged()
+                },
+                notificationCenter.addObserver(
+                    forName: NSScrollView.didEndLiveScrollNotification,
+                    object: scrollView,
+                    queue: .main
+                ) { [weak self] _ in
+                    self?.scheduleScrollEnd(after: 0.12)
+                }
+            ]
+        }
+
+        private func handleScrollBoundsChanged() {
+            clampObservedScrollPosition()
+            beginScrollActivity()
+            scheduleScrollEnd(after: scrollEndDebounce)
+        }
+
+        private func scrollSelectedRowIntoViewIfNeeded() {
+            guard selectionScrollToken != lastHandledSelectionScrollToken,
+                  let scrollView = observedScrollView else {
+                return
+            }
+
+            guard let selectedIndex else {
+                lastHandledSelectionScrollToken = selectionScrollToken
+                return
+            }
+
+            let clipView = scrollView.contentView
+            clampScrollPosition(scrollView)
+            guard let documentView = scrollView.documentView,
+                  let targetY = HistoryScrollVisibility.targetOriginY(
+                    selectedIndex: selectedIndex,
+                    rowHeight: rowHeight,
+                    visibleBounds: clipView.bounds,
+                    documentBounds: documentView.bounds,
+                    isFlipped: documentView.isFlipped
+                  ) else {
+                lastHandledSelectionScrollToken = selectionScrollToken
+                return
+            }
+
+            let targetOrigin = NSPoint(x: clipView.bounds.origin.x, y: targetY)
+            clipView.scroll(to: targetOrigin)
+            scrollView.reflectScrolledClipView(clipView)
+            lastHandledSelectionScrollToken = selectionScrollToken
+        }
+
+        private func clampObservedScrollPosition() {
+            guard !isClampingScrollPosition,
+                  let scrollView = observedScrollView else {
+                return
+            }
+
+            clampScrollPosition(scrollView)
+        }
+
+        private func clampScrollPosition(_ scrollView: NSScrollView) {
+            guard let documentView = scrollView.documentView else {
+                return
+            }
+
+            let clipView = scrollView.contentView
+            let visibleBounds = clipView.bounds
+            let documentBounds = documentView.bounds
+            let maximumX = max(documentBounds.minX, documentBounds.maxX - visibleBounds.width)
+            let maximumY = max(documentBounds.minY, documentBounds.maxY - visibleBounds.height)
+            let clampedOrigin = NSPoint(
+                x: min(max(visibleBounds.origin.x, documentBounds.minX), maximumX),
+                y: min(max(visibleBounds.origin.y, documentBounds.minY), maximumY)
+            )
+
+            guard clampedOrigin != visibleBounds.origin else {
+                return
+            }
+
+            isClampingScrollPosition = true
+            defer { isClampingScrollPosition = false }
+            clipView.scroll(to: clampedOrigin)
+            scrollView.reflectScrolledClipView(clipView)
+        }
+
+        private func beginScrollActivity() {
+            scrollEndWorkItem?.cancel()
+            scrollEndWorkItem = nil
+            guard !isScrolling else {
+                return
+            }
+
+            isScrolling = true
+            notifyScrollActivity(.began)
+        }
+
+        private func scheduleScrollEnd(after delay: TimeInterval) {
+            scrollEndWorkItem?.cancel()
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self,
+                      self.isScrolling else {
+                    return
+                }
+                self.isScrolling = false
+                self.scrollEndWorkItem = nil
+                self.notifyScrollActivity(.ended)
+            }
+            scrollEndWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: workItem)
+        }
+
+        private func notifyScrollActivity(_ activity: HistoryScrollActivity) {
+            guard let onScrollActivity else {
+                return
+            }
+
+            MainActor.assumeIsolated {
+                onScrollActivity(activity)
+            }
+        }
+
+        private var nearestScrollView: NSScrollView? {
+            var candidate = superview
+            while let view = candidate {
+                if let scrollView = view as? NSScrollView {
+                    return scrollView
+                }
+                candidate = view.superview
+            }
+            return nil
         }
     }
 }
@@ -597,11 +986,10 @@ private struct HistoryEmptyState: View {
     }
 }
 
-private let historyRowControlSize: CGFloat = 24
-
 private struct HistoryRow: View {
     let entry: OCRHistoryEntry
     let isSelected: Bool
+    let isScrolling: Bool
     let titleFontSize: Int
     let metadataFontSize: Int
     let folderBadgeColor: HistoryFolderColor?
@@ -639,6 +1027,7 @@ private struct HistoryRow: View {
                     currentFolderID: entry.folderID,
                     folderBadgeColor: folderBadgeColor,
                     folders: folders,
+                    isHoverEnabled: !isScrolling,
                     moveToFolder: moveToFolder,
                     moveToNewFolder: moveToNewFolder
                 )
@@ -654,8 +1043,19 @@ private struct HistoryRow: View {
                         }
                         .onSubmit(saveRename)
 
-                    HistoryActionButton(systemName: "checkmark", help: "Save name", tint: .green, action: saveRename)
-                    HistoryActionButton(systemName: "xmark", help: "Cancel", action: cancelRename)
+                    HistoryActionButton(
+                        systemName: "checkmark",
+                        help: "Save name",
+                        tint: .green,
+                        isHoverEnabled: !isScrolling,
+                        action: saveRename
+                    )
+                    HistoryActionButton(
+                        systemName: "xmark",
+                        help: "Cancel",
+                        isHoverEnabled: !isScrolling,
+                        action: cancelRename
+                    )
                 } else {
                     Button(action: reopen) {
                         HStack(spacing: 5) {
@@ -677,9 +1077,16 @@ private struct HistoryRow: View {
                             title: "Copy",
                             help: "Copy",
                             fontSize: metadataFontSize,
+                            isHoverEnabled: !isScrolling,
                             action: copy
                         )
-                        HistoryActionButton(systemName: "trash", help: "Delete", tint: .red, action: delete)
+                        HistoryActionButton(
+                            systemName: "trash",
+                            help: "Delete",
+                            tint: .red,
+                            isHoverEnabled: !isScrolling,
+                            action: delete
+                        )
                     }
                 }
             }
@@ -691,22 +1098,23 @@ private struct HistoryRow: View {
             .help("Reopen and edit")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 6)
-        .padding(.horizontal, 6)
+        .padding(.vertical, historyRowInnerPadding)
+        .padding(.horizontal, historyRowInnerPadding)
         .modifier(HistoryRowPanel(
             background: rowBaseBackground,
-            hoverProgress: hoverEffectProgress,
+            hoverProgress: renderedHoverEffectProgress,
             isSelected: isSelected,
             radius: 7
         ))
         .modifier(HistoryDepthCardHoverEffect(
-            progress: hoverEffectProgress,
+            progress: renderedHoverEffectProgress,
             hoverLocation: hoverLocation,
-            selectedIdleStrength: selectedIdleStrength,
-            selectedFloatStrength: selectedFloatStrength,
-            selectedFloatProgress: selectedFloatProgress,
+            selectedIdleStrength: renderedSelectedIdleStrength,
+            selectedFloatStrength: renderedSelectedFloatStrength,
+            selectedFloatProgress: renderedSelectedFloatProgress,
             selectedIdleStartDate: selectedIdleStartDate,
-            cornerRadius: 7
+            cornerRadius: 7,
+            isEnabled: !isScrolling
         ))
         .shadow(
             color: Color.black.opacity(shadowOpacity),
@@ -716,7 +1124,8 @@ private struct HistoryRow: View {
         .overlay {
             HistoryCardHoverTrackingArea(
                 hoverLocation: $hoverLocation,
-                isHovered: $isHovered
+                isHovered: $isHovered,
+                isEnabled: !isScrolling
             )
         }
         .onChange(of: isHovered) {
@@ -725,6 +1134,13 @@ private struct HistoryRow: View {
         }
         .onChange(of: isSelected) {
             updateHoverEffect(isActive: isHovered || $0)
+            updateSelectedIdleAnimation()
+        }
+        .onChange(of: isScrolling) { _ in
+            if isScrolling {
+                isHovered = false
+            }
+            updateHoverEffect(isActive: isSelected || isHovered)
             updateSelectedIdleAnimation()
         }
         .onAppear {
@@ -802,17 +1218,33 @@ private struct HistoryRow: View {
 
     private var shadowOpacity: Double {
         if isSelected {
-            return 0.10 - (hoverEffectProgress * 0.02) + selectedFloatStrength * 0.014
+            return 0.10 - (renderedHoverEffectProgress * 0.02) + renderedSelectedFloatStrength * 0.014
         }
-        return 0.08 * hoverEffectProgress
+        return 0.08 * renderedHoverEffectProgress
     }
 
     private var cardShadowRadius: CGFloat {
-        5 + hoverEffectProgress + selectedFloatStrength * 0.9
+        5 + renderedHoverEffectProgress + renderedSelectedFloatStrength * 0.9
     }
 
     private var cardShadowY: CGFloat {
-        1 + hoverEffectProgress + selectedFloatStrength * 0.55
+        1 + renderedHoverEffectProgress + renderedSelectedFloatStrength * 0.55
+    }
+
+    private var renderedHoverEffectProgress: Double {
+        isScrolling ? 0 : hoverEffectProgress
+    }
+
+    private var renderedSelectedIdleStrength: Double {
+        isScrolling ? 0 : selectedIdleStrength
+    }
+
+    private var renderedSelectedFloatStrength: Double {
+        isScrolling ? 0 : selectedFloatStrength
+    }
+
+    private var renderedSelectedFloatProgress: Double {
+        isScrolling ? 0 : selectedFloatProgress
     }
 
     private var thumbnail: some View {
@@ -820,22 +1252,13 @@ private struct HistoryRow: View {
             RoundedRectangle(cornerRadius: 5)
                 .fill(AppTheme.controlBackground)
 
-            if let image = entry.displayImage {
-                Image(nsImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .padding(4)
-                    .opacity(thumbnailImageOpacity)
-                    .brightness(thumbnailImageBrightness)
-                    .contrast(thumbnailImageContrast)
-            } else {
-                Image(systemName: "function")
-                    .font(.system(size: 18))
-                    .foregroundStyle(.tertiary)
-            }
+            HistoryThumbnailImage(entry: entry)
+                .opacity(thumbnailImageOpacity)
+                .brightness(thumbnailImageBrightness)
+                .contrast(thumbnailImageContrast)
         }
         .frame(maxWidth: .infinity)
-        .frame(height: 64)
+        .frame(height: historyThumbnailHeight)
         .clipShape(RoundedRectangle(cornerRadius: 5))
         .overlay {
             RoundedRectangle(cornerRadius: 5)
@@ -849,6 +1272,13 @@ private struct HistoryRow: View {
     }
 
     private func updateHoverEffect(isActive: Bool) {
+        guard !isScrolling else {
+            withAnimation(nil) {
+                hoverEffectProgress = 0
+            }
+            return
+        }
+
         withAnimation(historyCardHoverAnimation(isActive: isActive)) {
             hoverEffectProgress = isActive ? 1 : 0
         }
@@ -859,6 +1289,15 @@ private struct HistoryRow: View {
     }
 
     private func updateSelectedIdleAnimation() {
+        guard !isScrolling else {
+            isSelectedFloatAnimationRunning = false
+            withAnimation(nil) {
+                selectedIdleStrength = 0
+                selectedFloatStrength = 0
+            }
+            return
+        }
+
         if isSelectedIdle {
             selectedIdleStartDate = Date()
         }
@@ -900,6 +1339,148 @@ private struct HistoryRow: View {
 
     private var thumbnailImageContrast: Double {
         return 1.0
+    }
+}
+
+private struct HistoryThumbnailImage: View {
+    let entry: OCRHistoryEntry
+
+    @State private var image: NSImage?
+
+    init(entry: OCRHistoryEntry) {
+        self.entry = entry
+        let cachedImage = HistoryThumbnailImageCache.cacheKey(for: entry).flatMap {
+            HistoryThumbnailImageCache.shared.image(for: $0)
+        }
+        _image = State(initialValue: entry.image ?? cachedImage)
+    }
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .padding(4)
+            } else {
+                Image(systemName: "function")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .task(id: imageSourceID) {
+            await loadImage()
+        }
+    }
+
+    private var imageSourceID: String {
+        "\(entry.id.uuidString)|\(entry.imageURL?.path ?? "")|\(entry.image != nil)"
+    }
+
+    private var imageCacheKey: String? {
+        HistoryThumbnailImageCache.cacheKey(for: entry)
+    }
+
+    @MainActor
+    private func loadImage() async {
+        if let image = entry.image {
+            self.image = image
+            if let imageCacheKey {
+                HistoryThumbnailImageCache.shared.insert(image, for: imageCacheKey)
+            }
+            return
+        }
+
+        guard let url = entry.imageURL,
+              let imageCacheKey else {
+            image = nil
+            return
+        }
+
+        if let cachedImage = HistoryThumbnailImageCache.shared.image(for: imageCacheKey) {
+            image = cachedImage
+            return
+        }
+
+        image = nil
+        let data = await Task.detached(priority: .utility) {
+            try? Data(contentsOf: url)
+        }.value
+        guard !Task.isCancelled else {
+            return
+        }
+        guard let data else {
+            return
+        }
+        guard let loadedImage = NSImage(data: data) else {
+            return
+        }
+        HistoryThumbnailImageCache.shared.insert(loadedImage, for: imageCacheKey)
+        image = loadedImage
+    }
+}
+
+private final class HistoryThumbnailImageCache {
+    static let shared = HistoryThumbnailImageCache()
+
+    private let cache = NSCache<NSString, NSImage>()
+
+    private init() {
+        cache.countLimit = 256
+    }
+
+    func image(for key: String) -> NSImage? {
+        cache.object(forKey: key as NSString)
+    }
+
+    func insert(_ image: NSImage, for key: String) {
+        cache.setObject(image, forKey: key as NSString)
+    }
+
+    func preload(entries: [OCRHistoryEntry]) async {
+        for entry in entries {
+            guard !Task.isCancelled else {
+                return
+            }
+            await preload(entry)
+        }
+    }
+
+    @MainActor
+    private func preload(_ entry: OCRHistoryEntry) async {
+        guard let key = Self.cacheKey(for: entry) else {
+            return
+        }
+
+        if image(for: key) != nil {
+            return
+        }
+
+        if let image = entry.image {
+            insert(image, for: key)
+            return
+        }
+
+        guard let url = entry.imageURL else {
+            return
+        }
+
+        let data = await Task.detached(priority: .utility) {
+            try? Data(contentsOf: url)
+        }.value
+        guard !Task.isCancelled,
+              let data,
+              let loadedImage = NSImage(data: data) else {
+            return
+        }
+        insert(loadedImage, for: key)
+    }
+
+    static func cacheKey(for entry: OCRHistoryEntry) -> String? {
+        guard let imageURL = entry.imageURL else {
+            return nil
+        }
+        return "\(entry.id.uuidString)|\(imageURL.path)"
     }
 }
 
@@ -1058,6 +1639,7 @@ private struct HistoryDepthCardHoverEffect: AnimatableModifier {
     var selectedFloatProgress: Double
     let selectedIdleStartDate: Date
     let cornerRadius: CGFloat
+    let isEnabled: Bool
 
     init(
         progress: Double,
@@ -1066,7 +1648,8 @@ private struct HistoryDepthCardHoverEffect: AnimatableModifier {
         selectedFloatStrength: Double,
         selectedFloatProgress: Double,
         selectedIdleStartDate: Date,
-        cornerRadius: CGFloat
+        cornerRadius: CGFloat,
+        isEnabled: Bool
     ) {
         self.progress = progress
         hoverX = Double(hoverLocation.x)
@@ -1076,6 +1659,7 @@ private struct HistoryDepthCardHoverEffect: AnimatableModifier {
         self.selectedFloatProgress = selectedFloatProgress
         self.selectedIdleStartDate = selectedIdleStartDate
         self.cornerRadius = cornerRadius
+        self.isEnabled = isEnabled
     }
 
     var animatableData: HistoryDepthCardAnimationValues {
@@ -1103,15 +1687,20 @@ private struct HistoryDepthCardHoverEffect: AnimatableModifier {
         CGPoint(x: hoverX, y: hoverY)
     }
 
+    @ViewBuilder
     func body(content: Content) -> some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !usesAnimatedClock)) { timeline in
-            let effectiveHoverLocation = effectiveHoverLocation(for: timeline.date)
-            cardBody(content, effectiveHoverLocation: effectiveHoverLocation)
+        if isEnabled {
+            TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !usesAnimatedClock)) { timeline in
+                let effectiveHoverLocation = effectiveHoverLocation(for: timeline.date)
+                cardBody(content, effectiveHoverLocation: effectiveHoverLocation)
+            }
+        } else {
+            content
         }
     }
 
     private var usesAnimatedClock: Bool {
-        progress > 0 || selectedFloatStrength > 0 || selectedIdleStrength > 0
+        isEnabled && (progress > 0 || selectedFloatStrength > 0 || selectedIdleStrength > 0)
     }
 
     private func cardBody(_ content: Content, effectiveHoverLocation: CGPoint) -> some View {
@@ -1288,28 +1877,42 @@ private struct HistoryFoilShader: View {
 private struct HistoryCardHoverTrackingArea: NSViewRepresentable {
     @Binding var hoverLocation: CGPoint
     @Binding var isHovered: Bool
+    let isEnabled: Bool
 
     func makeNSView(context: Context) -> TrackingView {
         let view = TrackingView()
         view.hoverLocation = $hoverLocation
         view.isHovered = $isHovered
+        view.acceptsHoverEvents = isEnabled
         return view
     }
 
     func updateNSView(_ view: TrackingView, context: Context) {
         view.hoverLocation = $hoverLocation
         view.isHovered = $isHovered
+        view.acceptsHoverEvents = isEnabled
     }
 
     final class TrackingView: NSView {
         var hoverLocation: Binding<CGPoint>?
         var isHovered: Binding<Bool>?
+        var acceptsHoverEvents = true {
+            didSet {
+                guard oldValue != acceptsHoverEvents else {
+                    return
+                }
+                updateTrackingAreas()
+            }
+        }
         private var lastInBoundsHoverLocation = CGPoint(x: 0.5, y: 0.5)
 
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
             for trackingArea in trackingAreas {
                 removeTrackingArea(trackingArea)
+            }
+            guard acceptsHoverEvents else {
+                return
             }
             addTrackingArea(
                 NSTrackingArea(
@@ -1325,6 +1928,10 @@ private struct HistoryCardHoverTrackingArea: NSViewRepresentable {
         }
 
         override func mouseEntered(with event: NSEvent) {
+            guard acceptsHoverEvents else {
+                return
+            }
+
             updateLocation(
                 from: event,
                 animation: historyCardHoverLocationAnimation(response: historyCardHoverLocationSettleDuration)
@@ -1333,6 +1940,10 @@ private struct HistoryCardHoverTrackingArea: NSViewRepresentable {
         }
 
         override func mouseMoved(with event: NSEvent) {
+            guard acceptsHoverEvents else {
+                return
+            }
+
             updateLocation(
                 from: event,
                 animation: historyCardHoverLocationAnimation(response: historyCardHoverLocationFollowDuration)
@@ -1340,6 +1951,10 @@ private struct HistoryCardHoverTrackingArea: NSViewRepresentable {
         }
 
         override func mouseExited(with event: NSEvent) {
+            guard acceptsHoverEvents else {
+                return
+            }
+
             updateLocation(
                 from: event,
                 keepsLastInBoundsWhenOutside: true,
@@ -1395,6 +2010,7 @@ private struct HistoryFolderAssignmentMenu: View {
     let currentFolderID: HistoryFolder.ID?
     let folderBadgeColor: HistoryFolderColor?
     let folders: [HistoryFolder]
+    let isHoverEnabled: Bool
     let moveToFolder: (HistoryFolder.ID?) -> Void
     let moveToNewFolder: () -> Void
 
@@ -1406,7 +2022,7 @@ private struct HistoryFolderAssignmentMenu: View {
             HistoryFolderAssignmentIcon(
                 systemName: currentFolderID == nil ? "folder" : "folder.fill",
                 color: folderBadgeColor?.tint ?? Color.secondary.opacity(0.45),
-                isHovered: isFolderMenuHovered,
+                isHovered: isHoverEnabled && isFolderMenuHovered,
                 isPressed: isFolderMenuPressed
             )
 
@@ -1415,12 +2031,24 @@ private struct HistoryFolderAssignmentMenu: View {
                 folders: folders,
                 isHovered: $isFolderMenuHovered,
                 isPressed: $isFolderMenuPressed,
+                isHoverEnabled: isHoverEnabled,
                 moveToFolder: moveToFolder,
                 moveToNewFolder: moveToNewFolder
             )
         }
         .frame(width: historyRowControlSize, height: historyRowControlSize)
         .help("Move to folder")
+        .onChange(of: isHoverEnabled) { enabled in
+            if !enabled {
+                isFolderMenuHovered = false
+            }
+        }
+        .transaction { transaction in
+            if !isHoverEnabled {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
     }
 }
 
@@ -1462,6 +2090,7 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
     let folders: [HistoryFolder]
     @Binding var isHovered: Bool
     @Binding var isPressed: Bool
+    let isHoverEnabled: Bool
     let moveToFolder: (HistoryFolder.ID?) -> Void
     let moveToNewFolder: () -> Void
 
@@ -1479,6 +2108,7 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
     func makeNSView(context: Context) -> MenuTriggerView {
         let view = MenuTriggerView()
         view.coordinator = context.coordinator
+        view.acceptsHoverEvents = isHoverEnabled
         return view
     }
 
@@ -1490,6 +2120,7 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
         context.coordinator.moveToFolder = moveToFolder
         context.coordinator.moveToNewFolder = moveToNewFolder
         view.coordinator = context.coordinator
+        view.acceptsHoverEvents = isHoverEnabled
     }
 
     final class Coordinator: NSObject {
@@ -1582,11 +2213,25 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
 
     final class MenuTriggerView: NSView {
         weak var coordinator: Coordinator?
+        var acceptsHoverEvents = true {
+            didSet {
+                guard oldValue != acceptsHoverEvents else {
+                    return
+                }
+                if !acceptsHoverEvents {
+                    coordinator?.isHovered.wrappedValue = false
+                }
+                updateTrackingAreas()
+            }
+        }
 
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
             for trackingArea in trackingAreas {
                 removeTrackingArea(trackingArea)
+            }
+            guard acceptsHoverEvents else {
+                return
             }
             addTrackingArea(
                 NSTrackingArea(
@@ -1609,10 +2254,18 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
         }
 
         override func mouseEntered(with event: NSEvent) {
+            guard acceptsHoverEvents else {
+                return
+            }
+
             coordinator?.isHovered.wrappedValue = true
         }
 
         override func mouseExited(with event: NSEvent) {
+            guard acceptsHoverEvents else {
+                return
+            }
+
             coordinator?.isHovered.wrappedValue = false
             coordinator?.isPressed.wrappedValue = false
         }
@@ -1640,6 +2293,7 @@ private struct HistoryActionButton: View {
     let systemName: String
     let help: String
     var tint: Color = .accentColor
+    var isHoverEnabled = true
     let action: () -> Void
 
     @State private var isHovered = false
@@ -1651,9 +2305,25 @@ private struct HistoryActionButton: View {
                 .frame(width: historyRowControlSize, height: historyRowControlSize)
                 .contentShape(RoundedRectangle(cornerRadius: 5))
         }
-        .buttonStyle(HistoryActionButtonStyle(isHovered: isHovered, tint: tint))
-        .onHover { isHovered = $0 }
+        .buttonStyle(HistoryActionButtonStyle(isHovered: isHoverEnabled && isHovered, tint: tint))
+        .overlay {
+            HistoryControlHoverTrackingArea(
+                isHovered: $isHovered,
+                isEnabled: isHoverEnabled
+            )
+        }
         .help(help)
+        .onChange(of: isHoverEnabled) { enabled in
+            if !enabled {
+                isHovered = false
+            }
+        }
+        .transaction { transaction in
+            if !isHoverEnabled {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
     }
 }
 
@@ -1662,6 +2332,7 @@ private struct HistoryTextActionButton: View {
     let help: String
     let fontSize: Int
     var tint: Color = .accentColor
+    var isHoverEnabled = true
     let action: () -> Void
 
     @State private var isHovered = false
@@ -1675,9 +2346,94 @@ private struct HistoryTextActionButton: View {
                 .frame(height: historyRowControlSize)
                 .contentShape(RoundedRectangle(cornerRadius: 5))
         }
-        .buttonStyle(HistoryActionButtonStyle(isHovered: isHovered, tint: tint))
-        .onHover { isHovered = $0 }
+        .buttonStyle(HistoryActionButtonStyle(isHovered: isHoverEnabled && isHovered, tint: tint))
+        .overlay {
+            HistoryControlHoverTrackingArea(
+                isHovered: $isHovered,
+                isEnabled: isHoverEnabled
+            )
+        }
         .help(help)
+        .onChange(of: isHoverEnabled) { enabled in
+            if !enabled {
+                isHovered = false
+            }
+        }
+        .transaction { transaction in
+            if !isHoverEnabled {
+                transaction.animation = nil
+                transaction.disablesAnimations = true
+            }
+        }
+    }
+}
+
+private struct HistoryControlHoverTrackingArea: NSViewRepresentable {
+    @Binding var isHovered: Bool
+    let isEnabled: Bool
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.isHovered = $isHovered
+        view.acceptsHoverEvents = isEnabled
+        return view
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.isHovered = $isHovered
+        view.acceptsHoverEvents = isEnabled
+    }
+
+    final class TrackingView: NSView {
+        var isHovered: Binding<Bool>?
+        var acceptsHoverEvents = true {
+            didSet {
+                guard oldValue != acceptsHoverEvents else {
+                    return
+                }
+                if !acceptsHoverEvents {
+                    isHovered?.wrappedValue = false
+                }
+                updateTrackingAreas()
+            }
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            for trackingArea in trackingAreas {
+                removeTrackingArea(trackingArea)
+            }
+            guard acceptsHoverEvents else {
+                return
+            }
+            addTrackingArea(
+                NSTrackingArea(
+                    rect: .zero,
+                    options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited],
+                    owner: self
+                )
+            )
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            nil
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            guard acceptsHoverEvents else {
+                return
+            }
+
+            isHovered?.wrappedValue = true
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            guard acceptsHoverEvents else {
+                return
+            }
+
+            isHovered?.wrappedValue = false
+        }
     }
 }
 

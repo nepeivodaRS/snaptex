@@ -730,10 +730,6 @@ final class AppModel: ObservableObject {
         refreshPasteAvailability()
     }
 
-    func canRevealHistoryImage(_ entry: OCRHistoryEntry) -> Bool {
-        imageFileExists(at: historyImageURL(for: entry))
-    }
-
     func revealHistoryImageInFinder(_ entry: OCRHistoryEntry) {
         guard let imageURL = historyImageURL(for: entry),
               imageFileExists(at: imageURL) else {
