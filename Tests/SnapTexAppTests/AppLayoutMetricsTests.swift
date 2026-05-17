@@ -195,8 +195,8 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(theme.contains("endRadius: max(proxy.size.width, proxy.size.height) * 1.55"))
         XCTAssertTrue(theme.contains("radius: isHovered && isEnabled ? 16 : 0"))
         XCTAssertTrue(theme.contains("return isHovered ? AppTheme.snipAccent.opacity(0.42) : Color.white.opacity(0.12)"))
-        XCTAssertTrue(theme.contains(".cursorUpdate"))
-        XCTAssertTrue(theme.contains("NSCursor.pointingHand.set()"))
+        XCTAssertFalse(theme.contains(".cursorUpdate"))
+        XCTAssertFalse(theme.contains("NSCursor.pointingHand.set()"))
         XCTAssertFalse(contentView.contains(".buttonStyle(GraphitePrimaryButtonStyle())"))
         XCTAssertFalse(snipButtonSource.contains(".buttonStyle(GraphiteSecondaryButtonStyle())"))
     }
@@ -675,6 +675,55 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(scrollObserver.contains("scrollSelectedRowIntoViewIfNeeded()"))
         XCTAssertTrue(scrollObserver.contains("HistoryScrollVisibility.targetOriginY"))
         XCTAssertTrue(scrollObserver.contains("lastHandledSelectionScrollToken"))
+    }
+
+    func testNonHistoryScrollSurfacesDisableElasticOverscroll() throws {
+        let rigidScrollBehavior = try sourceFile("Sources/SnapTexApp/Support/RigidScrollBehavior.swift")
+        let latexTextView = try sourceFile("Sources/SnapTexApp/Views/LaTeXSyntaxTextView.swift")
+        let settingsView = try sourceFile("Sources/SnapTexApp/Views/SettingsView.swift")
+        let capturePreview = try sourceFile("Sources/SnapTexApp/Views/CapturePreviewPane.swift")
+
+        XCTAssertTrue(rigidScrollBehavior.contains("struct RigidScrollBehaviorObserver: NSViewRepresentable"))
+        XCTAssertTrue(rigidScrollBehavior.contains("scrollView.verticalScrollElasticity = .none"))
+        XCTAssertTrue(rigidScrollBehavior.contains("scrollView.horizontalScrollElasticity = .none"))
+        XCTAssertTrue(rigidScrollBehavior.contains("clipView.scroll(to:"))
+        XCTAssertTrue(rigidScrollBehavior.contains("scrollView.reflectScrolledClipView(clipView)"))
+
+        XCTAssertTrue(latexTextView.contains("RigidScrollBehavior.configure(scrollView)"))
+        XCTAssertTrue(latexTextView.contains("installRigidScrollBehavior(on: scrollView)"))
+        XCTAssertTrue(settingsView.contains(".rigidScrollBehavior()"))
+        XCTAssertGreaterThanOrEqual(settingsView.components(separatedBy: ".rigidScrollBehavior()").count - 1, 2)
+        XCTAssertFalse(capturePreview.contains("LaTeXPreviewView(latex: model.previewLatex, fontSize: model.renderedPreviewFontSize)\n                    .rigidScrollBehavior()"))
+    }
+
+    func testOutputLatexEditorInstallsLiveRigidScrollController() throws {
+        let latexTextView = try sourceFile("Sources/SnapTexApp/Views/LaTeXSyntaxTextView.swift")
+        let rigidScrollBehavior = try sourceFile("Sources/SnapTexApp/Support/RigidScrollBehavior.swift")
+
+        XCTAssertTrue(rigidScrollBehavior.contains("final class Controller"))
+        XCTAssertTrue(rigidScrollBehavior.contains("func install(on scrollView: NSScrollView)"))
+        XCTAssertTrue(rigidScrollBehavior.contains("NSView.boundsDidChangeNotification"))
+        XCTAssertTrue(rigidScrollBehavior.contains("NSScrollView.didLiveScrollNotification"))
+        XCTAssertTrue(latexTextView.contains("private let rigidScrollBehavior = RigidScrollBehavior.Controller()"))
+        XCTAssertTrue(latexTextView.contains("context.coordinator.installRigidScrollBehavior(on: scrollView)"))
+        XCTAssertTrue(latexTextView.contains("func installRigidScrollBehavior(on scrollView: NSScrollView)"))
+    }
+
+    func testRenderedLatexPreviewUsesNativeWebKitScrolling() throws {
+        let latexPreview = try sourceFile("Sources/SnapTexApp/Views/LaTeXPreviewView.swift")
+
+        XCTAssertTrue(latexPreview.contains("let webView = WKWebView()"))
+        XCTAssertFalse(latexPreview.contains("final class RigidLaTeXPreviewWebView: WKWebView"))
+        XCTAssertFalse(latexPreview.contains("func makeCoordinator() -> Coordinator"))
+        XCTAssertFalse(latexPreview.contains("navigationDelegate"))
+        XCTAssertFalse(latexPreview.contains("scheduleRigidScrollingInstall()"))
+        XCTAssertFalse(latexPreview.contains("RigidScrollBehavior.configure(scrollView)"))
+        XCTAssertFalse(latexPreview.contains("RigidScrollBehavior.clamp(scrollView)"))
+        XCTAssertFalse(latexPreview.contains("override func hitTest(_ point: NSPoint)"))
+        XCTAssertFalse(latexPreview.contains("override func scrollWheel(with event: NSEvent)"))
+        XCTAssertFalse(latexPreview.contains("scrollView.scrollWheel(with: event)"))
+        XCTAssertFalse(latexPreview.contains("super.scrollWheel(with: event)"))
+        XCTAssertFalse(latexPreview.contains("override func wantsScrollEventsForSwipeTracking"))
     }
 
     func testHistoryCardHoverTrackingRemovesTrackingAreaWhileScrolling() throws {

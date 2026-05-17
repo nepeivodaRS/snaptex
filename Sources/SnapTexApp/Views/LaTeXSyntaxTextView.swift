@@ -18,6 +18,7 @@ struct LaTeXSyntaxTextView: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
+        RigidScrollBehavior.configure(scrollView)
 
         let textView = NSTextView()
         textView.delegate = context.coordinator
@@ -46,11 +47,13 @@ struct LaTeXSyntaxTextView: NSViewRepresentable {
         scrollView.documentView = textView
         context.coordinator.configure(font: font, validationIssue: validationIssue)
         context.coordinator.apply(text: text, to: textView, force: true)
+        context.coordinator.installRigidScrollBehavior(on: scrollView)
 
         return scrollView
     }
 
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        RigidScrollBehavior.configure(scrollView)
         context.coordinator.text = $text
         context.coordinator.configure(font: font, validationIssue: validationIssue)
 
@@ -58,11 +61,13 @@ struct LaTeXSyntaxTextView: NSViewRepresentable {
             return
         }
         context.coordinator.apply(text: text, to: textView)
+        context.coordinator.installRigidScrollBehavior(on: scrollView)
     }
 
     final class Coordinator: NSObject, NSTextViewDelegate {
         var text: Binding<String>
 
+        private let rigidScrollBehavior = RigidScrollBehavior.Controller()
         private var font = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
         private var validationIssue: LaTeXValidationIssue?
         private var renderedText = ""
@@ -78,6 +83,10 @@ struct LaTeXSyntaxTextView: NSViewRepresentable {
         func configure(font: NSFont, validationIssue: LaTeXValidationIssue?) {
             self.font = font
             self.validationIssue = validationIssue
+        }
+
+        func installRigidScrollBehavior(on scrollView: NSScrollView) {
+            rigidScrollBehavior.install(on: scrollView)
         }
 
         func apply(text: String, to textView: NSTextView, force: Bool = false) {

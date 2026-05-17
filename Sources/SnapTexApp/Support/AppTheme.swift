@@ -143,8 +143,7 @@ private struct LiquidSnipButtonBody: View {
             .overlay {
                 LiquidSnipTrackingArea(
                     mouseLocation: $mouseLocation,
-                    isHovered: $isHovered,
-                    isEnabled: isEnabled
+                    isHovered: $isHovered
                 )
             }
             .onChange(of: mouseLocation) { updateGlowLocation($0) }
@@ -214,27 +213,22 @@ private struct LiquidSnipButtonBody: View {
 private struct LiquidSnipTrackingArea: NSViewRepresentable {
     @Binding var mouseLocation: CGPoint
     @Binding var isHovered: Bool
-    let isEnabled: Bool
 
     func makeNSView(context: Context) -> TrackingView {
         let view = TrackingView()
         view.mouseLocation = $mouseLocation
         view.isHovered = $isHovered
-        view.isEnabled = isEnabled
         return view
     }
 
     func updateNSView(_ view: TrackingView, context: Context) {
         view.mouseLocation = $mouseLocation
         view.isHovered = $isHovered
-        view.isEnabled = isEnabled
-        view.updateCursor()
     }
 
     final class TrackingView: NSView {
         var mouseLocation: Binding<CGPoint>?
         var isHovered: Binding<Bool>?
-        var isEnabled = true
         private var isInside = false
 
         override func updateTrackingAreas() {
@@ -245,7 +239,7 @@ private struct LiquidSnipTrackingArea: NSViewRepresentable {
             addTrackingArea(
                 NSTrackingArea(
                     rect: .zero,
-                    options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved, .cursorUpdate],
+                    options: [.activeInKeyWindow, .inVisibleRect, .mouseEnteredAndExited, .mouseMoved],
                     owner: self
                 )
             )
@@ -259,33 +253,15 @@ private struct LiquidSnipTrackingArea: NSViewRepresentable {
             isInside = true
             updateLocation(from: event)
             isHovered?.wrappedValue = true
-            updateCursor()
         }
 
         override func mouseMoved(with event: NSEvent) {
             updateLocation(from: event)
-            updateCursor()
         }
 
         override func mouseExited(with event: NSEvent) {
             isInside = false
             isHovered?.wrappedValue = false
-            NSCursor.arrow.set()
-        }
-
-        override func cursorUpdate(with event: NSEvent) {
-            updateCursor()
-        }
-
-        func updateCursor() {
-            guard isInside else {
-                return
-            }
-            if isEnabled {
-                NSCursor.pointingHand.set()
-            } else {
-                NSCursor.arrow.set()
-            }
         }
 
         private func updateLocation(from event: NSEvent) {

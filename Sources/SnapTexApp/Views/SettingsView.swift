@@ -29,6 +29,7 @@ struct SettingsView: View {
                 textSection
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
+            .rigidScrollBehavior()
         }
         .frame(
             minWidth: AppLayoutMetrics.settingsControlsPaneMinWidth,
@@ -223,6 +224,7 @@ struct SettingsView: View {
                 .background(AppTheme.insetBackground)
                 .graphitePanel(background: AppTheme.insetBackground)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .rigidScrollBehavior()
         }
         .padding(14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
