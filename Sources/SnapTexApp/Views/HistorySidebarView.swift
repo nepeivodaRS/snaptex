@@ -14,6 +14,7 @@ struct HistorySidebarView: View {
     @ObservedObject var model: AppModel
     @State private var renamingFolderID: HistoryFolder.ID?
     @State private var isHistoryScrolling = false
+    @State private var hoveredHistoryRowID: OCRHistoryEntry.ID?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -52,6 +53,7 @@ struct HistorySidebarView: View {
                                 metadataFontSize: model.settings.metadataFontSize,
                                 folderBadgeColor: model.historyFolderColor(for: entry.folderID),
                                 folders: model.historyFolders,
+                                activeHoverRowID: $hoveredHistoryRowID,
                                 copy: { model.copyHistoryEntry(entry) },
                                 canRevealImage: entry.imageURL != nil,
                                 revealImage: { model.revealHistoryImageInFinder(entry) },
@@ -986,6 +988,14 @@ private struct HistoryEmptyState: View {
     }
 }
 
+private enum HistoryRowControlHoverTarget: Equatable {
+    case folderAssignment
+    case copy
+    case delete
+    case saveRename
+    case cancelRename
+}
+
 private struct HistoryRow: View {
     let entry: OCRHistoryEntry
     let isSelected: Bool
@@ -994,6 +1004,7 @@ private struct HistoryRow: View {
     let metadataFontSize: Int
     let folderBadgeColor: HistoryFolderColor?
     let folders: [HistoryFolder]
+    @Binding var activeHoverRowID: OCRHistoryEntry.ID?
     let copy: () -> Void
     let canRevealImage: Bool
     let revealImage: () -> Void
@@ -1006,6 +1017,7 @@ private struct HistoryRow: View {
     @State private var isRenaming = false
     @State private var draftTitle = ""
     @State private var isHovered = false
+    @State private var hoveredControl: HistoryRowControlHoverTarget?
     @State private var hoverLocation = CGPoint(x: 0.5, y: 0.5)
     @State private var hoverEffectProgress = 0.0
     @State private var selectedIdleStrength = 0.0
@@ -1028,6 +1040,9 @@ private struct HistoryRow: View {
                     folderBadgeColor: folderBadgeColor,
                     folders: folders,
                     isHoverEnabled: !isScrolling,
+                    isHoverActive: isActiveHoverRow,
+                    activeHoverTarget: $hoveredControl,
+                    hoverTarget: .folderAssignment,
                     moveToFolder: moveToFolder,
                     moveToNewFolder: moveToNewFolder
                 )
@@ -1048,12 +1063,18 @@ private struct HistoryRow: View {
                         help: "Save name",
                         tint: .green,
                         isHoverEnabled: !isScrolling,
+                        isHoverActive: isActiveHoverRow,
+                        activeHoverTarget: $hoveredControl,
+                        hoverTarget: .saveRename,
                         action: saveRename
                     )
                     HistoryActionButton(
                         systemName: "xmark",
                         help: "Cancel",
                         isHoverEnabled: !isScrolling,
+                        isHoverActive: isActiveHoverRow,
+                        activeHoverTarget: $hoveredControl,
+                        hoverTarget: .cancelRename,
                         action: cancelRename
                     )
                 } else {
@@ -1078,6 +1099,9 @@ private struct HistoryRow: View {
                             help: "Copy",
                             fontSize: metadataFontSize,
                             isHoverEnabled: !isScrolling,
+                            isHoverActive: isActiveHoverRow,
+                            activeHoverTarget: $hoveredControl,
+                            hoverTarget: .copy,
                             action: copy
                         )
                         HistoryActionButton(
@@ -1085,6 +1109,9 @@ private struct HistoryRow: View {
                             help: "Delete",
                             tint: .red,
                             isHoverEnabled: !isScrolling,
+                            isHoverActive: isActiveHoverRow,
+                            activeHoverTarget: $hoveredControl,
+                            hoverTarget: .delete,
                             action: delete
                         )
                     }
@@ -1129,6 +1156,7 @@ private struct HistoryRow: View {
             )
         }
         .onChange(of: isHovered) {
+            updateActiveHoverRow(isHovered: $0)
             updateHoverEffect(isActive: isSelected || $0)
             updateSelectedIdleAnimation()
         }
@@ -1139,13 +1167,23 @@ private struct HistoryRow: View {
         .onChange(of: isScrolling) { _ in
             if isScrolling {
                 isHovered = false
+                clearActiveHoverRow()
             }
             updateHoverEffect(isActive: isSelected || isHovered)
             updateSelectedIdleAnimation()
         }
+        .onChange(of: isActiveHoverRow) { isActive in
+            if !isActive {
+                hoveredControl = nil
+            }
+        }
         .onAppear {
+            updateActiveHoverRow(isHovered: isHovered)
             updateHoverEffect(isActive: isSelected || isHovered)
             updateSelectedIdleAnimation()
+        }
+        .onDisappear {
+            clearActiveHoverRow()
         }
         .contextMenu {
             Button("Rename", action: beginRename)
@@ -1247,6 +1285,10 @@ private struct HistoryRow: View {
         isScrolling ? 0 : selectedFloatProgress
     }
 
+    private var isActiveHoverRow: Bool {
+        !isScrolling && activeHoverRowID == entry.id
+    }
+
     private var thumbnail: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 5)
@@ -1269,6 +1311,21 @@ private struct HistoryRow: View {
             transaction.disablesAnimations = true
         }
         .contentShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    private func updateActiveHoverRow(isHovered: Bool) {
+        if isHovered && !isScrolling {
+            activeHoverRowID = entry.id
+            return
+        }
+        clearActiveHoverRow()
+    }
+
+    private func clearActiveHoverRow() {
+        if activeHoverRowID == entry.id {
+            activeHoverRowID = nil
+        }
+        hoveredControl = nil
     }
 
     private func updateHoverEffect(isActive: Bool) {
@@ -2011,6 +2068,9 @@ private struct HistoryFolderAssignmentMenu: View {
     let folderBadgeColor: HistoryFolderColor?
     let folders: [HistoryFolder]
     let isHoverEnabled: Bool
+    var isHoverActive = true
+    var activeHoverTarget: Binding<HistoryRowControlHoverTarget?>?
+    var hoverTarget: HistoryRowControlHoverTarget?
     let moveToFolder: (HistoryFolder.ID?) -> Void
     let moveToNewFolder: () -> Void
 
@@ -2022,14 +2082,14 @@ private struct HistoryFolderAssignmentMenu: View {
             HistoryFolderAssignmentIcon(
                 systemName: currentFolderID == nil ? "folder" : "folder.fill",
                 color: folderBadgeColor?.tint ?? Color.secondary.opacity(0.45),
-                isHovered: isHoverEnabled && isFolderMenuHovered,
+                isHovered: effectiveIsHovered,
                 isPressed: isFolderMenuPressed
             )
 
             FolderAssignmentMenuBridge(
                 currentFolderID: currentFolderID,
                 folders: folders,
-                isHovered: $isFolderMenuHovered,
+                isHovered: folderHoverBinding,
                 isPressed: $isFolderMenuPressed,
                 isHoverEnabled: isHoverEnabled,
                 moveToFolder: moveToFolder,
@@ -2040,7 +2100,15 @@ private struct HistoryFolderAssignmentMenu: View {
         .help("Move to folder")
         .onChange(of: isHoverEnabled) { enabled in
             if !enabled {
-                isFolderMenuHovered = false
+                updateHover(false)
+                isFolderMenuPressed = false
+            }
+        }
+        .onChange(of: isHoverActive) { active in
+            if active {
+                updateActiveHoverTarget(isHovered: isFolderMenuHovered)
+            } else {
+                updateHover(false)
             }
         }
         .transaction { transaction in
@@ -2048,6 +2116,39 @@ private struct HistoryFolderAssignmentMenu: View {
                 transaction.animation = nil
                 transaction.disablesAnimations = true
             }
+        }
+    }
+
+    private var effectiveIsHovered: Bool {
+        guard isHoverEnabled && isHoverActive && isFolderMenuHovered else {
+            return false
+        }
+        guard let activeHoverTarget, let hoverTarget else {
+            return true
+        }
+        return activeHoverTarget.wrappedValue == hoverTarget
+    }
+
+    private var folderHoverBinding: Binding<Bool> {
+        Binding(
+            get: { isFolderMenuHovered },
+            set: { updateHover($0) }
+        )
+    }
+
+    private func updateHover(_ isHovered: Bool) {
+        isFolderMenuHovered = isHovered
+        updateActiveHoverTarget(isHovered: isHovered)
+    }
+
+    private func updateActiveHoverTarget(isHovered: Bool) {
+        guard let activeHoverTarget, let hoverTarget else {
+            return
+        }
+        if isHovered && isHoverEnabled && isHoverActive {
+            activeHoverTarget.wrappedValue = hoverTarget
+        } else if activeHoverTarget.wrappedValue == hoverTarget {
+            activeHoverTarget.wrappedValue = nil
         }
     }
 }
@@ -2121,6 +2222,7 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
         context.coordinator.moveToNewFolder = moveToNewFolder
         view.coordinator = context.coordinator
         view.acceptsHoverEvents = isHoverEnabled
+        view.syncHoverValidation()
     }
 
     final class Coordinator: NSObject {
@@ -2219,11 +2321,12 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
                     return
                 }
                 if !acceptsHoverEvents {
-                    coordinator?.isHovered.wrappedValue = false
+                    setHovered(false)
                 }
                 updateTrackingAreas()
             }
         }
+        private var hoverValidator: HistoryControlHoverValidator?
 
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
@@ -2242,6 +2345,15 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
             )
         }
 
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil {
+                setHovered(false)
+            } else {
+                syncHoverValidation()
+            }
+        }
+
         override func hitTest(_ point: NSPoint) -> NSView? {
             guard let event = window?.currentEvent else {
                 return nil
@@ -2255,18 +2367,20 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
 
         override func mouseEntered(with event: NSEvent) {
             guard acceptsHoverEvents else {
+                setHovered(false)
                 return
             }
 
-            coordinator?.isHovered.wrappedValue = true
+            updateHover(from: event)
         }
 
         override func mouseExited(with event: NSEvent) {
             guard acceptsHoverEvents else {
+                setHovered(false)
                 return
             }
 
-            coordinator?.isHovered.wrappedValue = false
+            setHovered(false)
             coordinator?.isPressed.wrappedValue = false
         }
 
@@ -2286,6 +2400,169 @@ private struct FolderAssignmentMenuBridge: NSViewRepresentable {
             NSMenu.popUpContextMenu(menu, with: event, for: self)
             coordinator?.isPressed.wrappedValue = false
         }
+
+        func syncHoverValidation() {
+            guard acceptsHoverEvents, coordinator?.isHovered.wrappedValue == true else {
+                stopHoverValidation()
+                return
+            }
+
+            activeHoverValidator().start()
+        }
+
+        private func updateHover(from event: NSEvent) {
+            activeHoverValidator().updateHover(from: event)
+        }
+
+        private func setHovered(_ isHovered: Bool) {
+            if coordinator?.isHovered.wrappedValue != isHovered {
+                coordinator?.isHovered.wrappedValue = isHovered
+            }
+
+            if isHovered && acceptsHoverEvents {
+                activeHoverValidator().start()
+            } else {
+                stopHoverValidation()
+            }
+        }
+
+        private func activeHoverValidator() -> HistoryControlHoverValidator {
+            if let hoverValidator {
+                return hoverValidator
+            }
+
+            let validator = HistoryControlHoverValidator(
+                view: self,
+                isEnabled: { [weak self] in
+                    self?.acceptsHoverEvents == true
+                },
+                setHovered: { [weak self] isHovered in
+                    self?.setHovered(isHovered)
+                }
+            )
+            hoverValidator = validator
+            return validator
+        }
+
+        private func stopHoverValidation() {
+            hoverValidator?.stop()
+        }
+    }
+}
+
+private final class HistoryControlHoverValidator {
+    private weak var view: NSView?
+    private let isEnabled: () -> Bool
+    private let setHovered: (Bool) -> Void
+    private var hoverMonitor: Any?
+    private var hoverValidationTimer: Timer?
+    private var isValidating = false
+
+    init(
+        view: NSView,
+        isEnabled: @escaping () -> Bool,
+        setHovered: @escaping (Bool) -> Void
+    ) {
+        self.view = view
+        self.isEnabled = isEnabled
+        self.setHovered = setHovered
+    }
+
+    deinit {
+        stop()
+    }
+
+    func start() {
+        guard !isValidating else {
+            return
+        }
+        guard isEnabled(), view?.window != nil else {
+            stop()
+            setHovered(false)
+            return
+        }
+
+        isValidating = true
+        installHoverMonitorIfNeeded()
+        installHoverValidationTimerIfNeeded()
+        updateHoverFromCurrentPointer()
+    }
+
+    func stop() {
+        isValidating = false
+        removeHoverMonitor()
+        removeHoverValidationTimer()
+    }
+
+    func updateHover(from event: NSEvent) {
+        guard isEnabled() else {
+            setHovered(false)
+            return
+        }
+        guard let view, event.window === view.window else {
+            updateHoverFromCurrentPointer()
+            return
+        }
+
+        updateHoverFromWindowPoint(event.locationInWindow)
+    }
+
+    private func updateHoverFromCurrentPointer() {
+        guard let window = view?.window else {
+            setHovered(false)
+            return
+        }
+
+        updateHoverFromWindowPoint(window.mouseLocationOutsideOfEventStream)
+    }
+
+    private func updateHoverFromWindowPoint(_ windowPoint: NSPoint) {
+        guard isEnabled(), let view else {
+            setHovered(false)
+            return
+        }
+
+        let point = view.convert(windowPoint, from: nil)
+        setHovered(view.bounds.contains(point))
+    }
+
+    private func installHoverMonitorIfNeeded() {
+        guard hoverMonitor == nil else {
+            return
+        }
+
+        hoverMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged]
+        ) { [weak self] event in
+            self?.updateHover(from: event)
+            return event
+        }
+    }
+
+    private func removeHoverMonitor() {
+        guard let hoverMonitor else {
+            return
+        }
+
+        NSEvent.removeMonitor(hoverMonitor)
+        self.hoverMonitor = nil
+    }
+
+    private func installHoverValidationTimerIfNeeded() {
+        guard hoverValidationTimer == nil else {
+            return
+        }
+
+        let timer = Timer(timeInterval: 1.0 / 60.0, repeats: true) { [weak self] _ in
+            self?.updateHoverFromCurrentPointer()
+        }
+        hoverValidationTimer = timer
+        RunLoop.main.add(timer, forMode: .common)
+    }
+
+    private func removeHoverValidationTimer() {
+        hoverValidationTimer?.invalidate()
+        hoverValidationTimer = nil
     }
 }
 
@@ -2294,6 +2571,9 @@ private struct HistoryActionButton: View {
     let help: String
     var tint: Color = .accentColor
     var isHoverEnabled = true
+    var isHoverActive = true
+    var activeHoverTarget: Binding<HistoryRowControlHoverTarget?>?
+    var hoverTarget: HistoryRowControlHoverTarget?
     let action: () -> Void
 
     @State private var isHovered = false
@@ -2305,17 +2585,24 @@ private struct HistoryActionButton: View {
                 .frame(width: historyRowControlSize, height: historyRowControlSize)
                 .contentShape(RoundedRectangle(cornerRadius: 5))
         }
-        .buttonStyle(HistoryActionButtonStyle(isHovered: isHoverEnabled && isHovered, tint: tint))
+        .buttonStyle(HistoryActionButtonStyle(isHovered: effectiveIsHovered, tint: tint))
         .overlay {
             HistoryControlHoverTrackingArea(
-                isHovered: $isHovered,
+                isHovered: hoverBinding,
                 isEnabled: isHoverEnabled
             )
         }
         .help(help)
         .onChange(of: isHoverEnabled) { enabled in
             if !enabled {
-                isHovered = false
+                updateHover(false)
+            }
+        }
+        .onChange(of: isHoverActive) { active in
+            if active {
+                updateActiveHoverTarget(isHovered: isHovered)
+            } else {
+                updateHover(false)
             }
         }
         .transaction { transaction in
@@ -2323,6 +2610,39 @@ private struct HistoryActionButton: View {
                 transaction.animation = nil
                 transaction.disablesAnimations = true
             }
+        }
+    }
+
+    private var effectiveIsHovered: Bool {
+        guard isHoverEnabled && isHoverActive && isHovered else {
+            return false
+        }
+        guard let activeHoverTarget, let hoverTarget else {
+            return true
+        }
+        return activeHoverTarget.wrappedValue == hoverTarget
+    }
+
+    private var hoverBinding: Binding<Bool> {
+        Binding(
+            get: { isHovered },
+            set: { updateHover($0) }
+        )
+    }
+
+    private func updateHover(_ isHovered: Bool) {
+        self.isHovered = isHovered
+        updateActiveHoverTarget(isHovered: isHovered)
+    }
+
+    private func updateActiveHoverTarget(isHovered: Bool) {
+        guard let activeHoverTarget, let hoverTarget else {
+            return
+        }
+        if isHovered && isHoverEnabled && isHoverActive {
+            activeHoverTarget.wrappedValue = hoverTarget
+        } else if activeHoverTarget.wrappedValue == hoverTarget {
+            activeHoverTarget.wrappedValue = nil
         }
     }
 }
@@ -2333,6 +2653,9 @@ private struct HistoryTextActionButton: View {
     let fontSize: Int
     var tint: Color = .accentColor
     var isHoverEnabled = true
+    var isHoverActive = true
+    var activeHoverTarget: Binding<HistoryRowControlHoverTarget?>?
+    var hoverTarget: HistoryRowControlHoverTarget?
     let action: () -> Void
 
     @State private var isHovered = false
@@ -2346,17 +2669,24 @@ private struct HistoryTextActionButton: View {
                 .frame(height: historyRowControlSize)
                 .contentShape(RoundedRectangle(cornerRadius: 5))
         }
-        .buttonStyle(HistoryActionButtonStyle(isHovered: isHoverEnabled && isHovered, tint: tint))
+        .buttonStyle(HistoryActionButtonStyle(isHovered: effectiveIsHovered, tint: tint))
         .overlay {
             HistoryControlHoverTrackingArea(
-                isHovered: $isHovered,
+                isHovered: hoverBinding,
                 isEnabled: isHoverEnabled
             )
         }
         .help(help)
         .onChange(of: isHoverEnabled) { enabled in
             if !enabled {
-                isHovered = false
+                updateHover(false)
+            }
+        }
+        .onChange(of: isHoverActive) { active in
+            if active {
+                updateActiveHoverTarget(isHovered: isHovered)
+            } else {
+                updateHover(false)
             }
         }
         .transaction { transaction in
@@ -2364,6 +2694,39 @@ private struct HistoryTextActionButton: View {
                 transaction.animation = nil
                 transaction.disablesAnimations = true
             }
+        }
+    }
+
+    private var effectiveIsHovered: Bool {
+        guard isHoverEnabled && isHoverActive && isHovered else {
+            return false
+        }
+        guard let activeHoverTarget, let hoverTarget else {
+            return true
+        }
+        return activeHoverTarget.wrappedValue == hoverTarget
+    }
+
+    private var hoverBinding: Binding<Bool> {
+        Binding(
+            get: { isHovered },
+            set: { updateHover($0) }
+        )
+    }
+
+    private func updateHover(_ isHovered: Bool) {
+        self.isHovered = isHovered
+        updateActiveHoverTarget(isHovered: isHovered)
+    }
+
+    private func updateActiveHoverTarget(isHovered: Bool) {
+        guard let activeHoverTarget, let hoverTarget else {
+            return
+        }
+        if isHovered && isHoverEnabled && isHoverActive {
+            activeHoverTarget.wrappedValue = hoverTarget
+        } else if activeHoverTarget.wrappedValue == hoverTarget {
+            activeHoverTarget.wrappedValue = nil
         }
     }
 }
@@ -2382,6 +2745,7 @@ private struct HistoryControlHoverTrackingArea: NSViewRepresentable {
     func updateNSView(_ view: TrackingView, context: Context) {
         view.isHovered = $isHovered
         view.acceptsHoverEvents = isEnabled
+        view.syncHoverValidation()
     }
 
     final class TrackingView: NSView {
@@ -2392,11 +2756,12 @@ private struct HistoryControlHoverTrackingArea: NSViewRepresentable {
                     return
                 }
                 if !acceptsHoverEvents {
-                    isHovered?.wrappedValue = false
+                    setHovered(false)
                 }
                 updateTrackingAreas()
             }
         }
+        private var hoverValidator: HistoryControlHoverValidator?
 
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
@@ -2419,20 +2784,78 @@ private struct HistoryControlHoverTrackingArea: NSViewRepresentable {
             nil
         }
 
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if window == nil {
+                setHovered(false)
+            } else {
+                syncHoverValidation()
+            }
+        }
+
         override func mouseEntered(with event: NSEvent) {
             guard acceptsHoverEvents else {
+                setHovered(false)
                 return
             }
 
-            isHovered?.wrappedValue = true
+            updateHover(from: event)
         }
 
         override func mouseExited(with event: NSEvent) {
             guard acceptsHoverEvents else {
+                setHovered(false)
                 return
             }
 
-            isHovered?.wrappedValue = false
+            setHovered(false)
+        }
+
+        func syncHoverValidation() {
+            guard acceptsHoverEvents, isHovered?.wrappedValue == true else {
+                stopHoverValidation()
+                return
+            }
+
+            activeHoverValidator().start()
+        }
+
+        private func updateHover(from event: NSEvent) {
+            activeHoverValidator().updateHover(from: event)
+        }
+
+        private func setHovered(_ nextIsHovered: Bool) {
+            if isHovered?.wrappedValue != nextIsHovered {
+                isHovered?.wrappedValue = nextIsHovered
+            }
+
+            if nextIsHovered && acceptsHoverEvents {
+                activeHoverValidator().start()
+            } else {
+                stopHoverValidation()
+            }
+        }
+
+        private func activeHoverValidator() -> HistoryControlHoverValidator {
+            if let hoverValidator {
+                return hoverValidator
+            }
+
+            let validator = HistoryControlHoverValidator(
+                view: self,
+                isEnabled: { [weak self] in
+                    self?.acceptsHoverEvents == true
+                },
+                setHovered: { [weak self] isHovered in
+                    self?.setHovered(isHovered)
+                }
+            )
+            hoverValidator = validator
+            return validator
+        }
+
+        private func stopHoverValidation() {
+            hoverValidator?.stop()
         }
     }
 }

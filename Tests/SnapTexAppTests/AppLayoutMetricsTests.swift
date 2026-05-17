@@ -740,6 +740,20 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(updateTrackingAreasSource.contains("addTrackingArea("))
     }
 
+    func testHistoryCardHoverTrackingDoesNotInterceptControlPointerEvents() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        let trackingView = try viewSource(named: "HistoryCardHoverTrackingArea", in: historyView)
+        guard let hitTestRange = trackingView.range(of: "override func hitTest(_ point: NSPoint)") else {
+            XCTFail("Tracking view should decide which pointer events it receives")
+            return
+        }
+        let hitTestSource = trackingView[hitTestRange.lowerBound...]
+
+        XCTAssertTrue(hitTestSource.contains("nil"))
+        XCTAssertFalse(hitTestSource.contains("event.type == .mouseMoved"))
+        XCTAssertFalse(hitTestSource.contains("return self"))
+    }
+
     func testHistoryRowControlsRemoveHoverTrackingWhileScrolling() throws {
         let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
         let historyRow = try viewSource(named: "HistoryRow", in: historyView)
@@ -762,6 +776,63 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(hoverTracking.contains("guard acceptsHoverEvents else {\n                return\n            }"))
         XCTAssertTrue(folderBridge.contains("let isHoverEnabled: Bool"))
         XCTAssertTrue(folderBridge.contains("guard acceptsHoverEvents else {\n                return\n            }"))
+    }
+
+    func testHistoryRowControlHoverIsScopedToActiveRowAndControl() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        let historyRow = try viewSource(named: "HistoryRow", in: historyView)
+        let folderMenu = try viewSource(named: "HistoryFolderAssignmentMenu", in: historyView)
+        let actionButton = try viewSource(named: "HistoryActionButton", in: historyView)
+        let textActionButton = try viewSource(named: "HistoryTextActionButton", in: historyView)
+
+        XCTAssertTrue(historyView.contains("@State private var hoveredHistoryRowID: OCRHistoryEntry.ID?"))
+        XCTAssertTrue(historyView.contains("activeHoverRowID: $hoveredHistoryRowID"))
+        XCTAssertTrue(historyRow.contains("@Binding var activeHoverRowID: OCRHistoryEntry.ID?"))
+        XCTAssertTrue(historyRow.contains("@State private var hoveredControl: HistoryRowControlHoverTarget?"))
+        XCTAssertTrue(historyRow.contains("private var isActiveHoverRow: Bool"))
+        XCTAssertTrue(historyRow.contains("isHoverEnabled: !isScrolling"))
+        XCTAssertTrue(historyRow.contains("isHoverActive: isActiveHoverRow"))
+        XCTAssertTrue(historyRow.contains("activeHoverTarget: $hoveredControl"))
+        XCTAssertTrue(historyRow.contains("hoverTarget: .folderAssignment"))
+        XCTAssertTrue(historyRow.contains("hoverTarget: .copy"))
+        XCTAssertTrue(historyRow.contains("hoverTarget: .delete"))
+        XCTAssertTrue(historyRow.contains("onChange(of: isActiveHoverRow)"))
+        XCTAssertTrue(folderMenu.contains("var isHoverActive = true"))
+        XCTAssertTrue(actionButton.contains("var isHoverActive = true"))
+        XCTAssertTrue(textActionButton.contains("var isHoverActive = true"))
+        XCTAssertTrue(folderMenu.contains("onChange(of: isHoverActive)"))
+        XCTAssertTrue(actionButton.contains("onChange(of: isHoverActive)"))
+        XCTAssertTrue(textActionButton.contains("onChange(of: isHoverActive)"))
+        XCTAssertTrue(folderMenu.contains("private var effectiveIsHovered: Bool"))
+        XCTAssertTrue(actionButton.contains("private var effectiveIsHovered: Bool"))
+        XCTAssertTrue(textActionButton.contains("private var effectiveIsHovered: Bool"))
+    }
+
+    func testHistoryRowControlHoverSelfCorrectsDuringCardAnimation() throws {
+        let historyView = try sourceFile("Sources/SnapTexApp/Views/HistorySidebarView.swift")
+        guard let hoverTracking = privateStructSource(named: "HistoryControlHoverTrackingArea", in: historyView) else {
+            XCTFail("History row controls should use dedicated hover tracking")
+            return
+        }
+        let folderBridge = try viewSource(named: "FolderAssignmentMenuBridge", in: historyView)
+
+        XCTAssertTrue(historyView.contains("private final class HistoryControlHoverValidator"))
+        XCTAssertTrue(historyView.contains("NSEvent.addLocalMonitorForEvents"))
+        XCTAssertTrue(historyView.contains("Timer(timeInterval: 1.0 / 60.0"))
+        XCTAssertTrue(historyView.contains("window.mouseLocationOutsideOfEventStream"))
+        XCTAssertTrue(historyView.contains("updateHoverFromWindowPoint"))
+        XCTAssertTrue(historyView.contains("removeHoverMonitor()"))
+        XCTAssertTrue(historyView.contains("removeHoverValidationTimer()"))
+        XCTAssertTrue(historyView.contains("private var isValidating = false"))
+        XCTAssertTrue(historyView.contains("guard !isValidating else"))
+        XCTAssertTrue(historyView.contains("isValidating = true"))
+        XCTAssertTrue(historyView.contains("isValidating = false"))
+        XCTAssertTrue(hoverTracking.contains("activeHoverValidator().updateHover(from: event)"))
+        XCTAssertTrue(hoverTracking.contains("activeHoverValidator().start()"))
+        XCTAssertTrue(hoverTracking.contains("hoverValidator?.stop()"))
+        XCTAssertTrue(folderBridge.contains("activeHoverValidator().updateHover(from: event)"))
+        XCTAssertTrue(folderBridge.contains("activeHoverValidator().start()"))
+        XCTAssertTrue(folderBridge.contains("hoverValidator?.stop()"))
     }
 
     func testHistoryRowAvoidsPerBodyDateFormatterConstruction() throws {
@@ -1086,7 +1157,8 @@ final class AppLayoutMetricsTests: XCTestCase {
         XCTAssertTrue(historyView.contains("FolderAssignmentMenuBridge: NSViewRepresentable"))
         XCTAssertTrue(historyView.contains("@State private var isFolderMenuHovered = false"))
         XCTAssertTrue(historyView.contains("@State private var isFolderMenuPressed = false"))
-        XCTAssertTrue(historyView.contains("isHovered: $isFolderMenuHovered"))
+        XCTAssertTrue(historyView.contains("isHovered: folderHoverBinding"))
+        XCTAssertTrue(historyView.contains("isHovered: effectiveIsHovered"))
         XCTAssertTrue(historyView.contains("isPressed: $isFolderMenuPressed"))
         XCTAssertTrue(historyView.contains("systemName: currentFolderID == nil ? \"folder\" : \"folder.fill\""))
         XCTAssertTrue(historyView.contains("color: folderBadgeColor?.tint ?? Color.secondary.opacity(0.45)"))
