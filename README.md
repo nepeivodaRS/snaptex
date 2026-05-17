@@ -22,10 +22,9 @@ SnapTex is a local macOS app for capturing equations from your screen and conver
 ## Core Features
 
 - Capture an equation region with the Snip button or global shortcut.
-- Paste or drag an equation image into the app.
 - Edit, preview, copy, and format the recognized LaTeX.
 - Export the rendered formula as PNG or EPS.
-- Keep recent recognitions in a persistent history.
+- Keep recent snapshots in a persistent history.
 - Manage local OCR models from inside the app.
 
 ## Models
@@ -34,8 +33,6 @@ SnapTex supports local formula recognition with:
 
 - [UniMERNet](https://github.com/opendatalab/UniMERNet): [tiny](https://huggingface.co/wanderkid/unimernet_tiny), [small](https://huggingface.co/wanderkid/unimernet_small), and [base](https://huggingface.co/wanderkid/unimernet_base).
 - [PaddleOCR PP-FormulaNet_plus](https://github.com/PaddlePaddle/PaddleOCR): [S](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-S), [M](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-M), and [L](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-L).
-
-Missing models can be downloaded from the app when you select them.
 
 ## Install
 
@@ -73,12 +70,6 @@ The app is installed as:
 
 ```text
 /Applications/snaptex.app
-```
-
-By default, setup-managed OCR files live under:
-
-```text
-~/Library/Application Support/snaptex
 ```
 
 ## Development
