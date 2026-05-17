@@ -17,7 +17,7 @@
 
 ## Overview
 
-SnapTex is a local macOS app for capturing equations from your screen and converting them into LaTeX. It pairs a native SwiftUI interface with local Python OCR workers, rendered previews, copy-ready output, and a lightweight recognition history.
+SnapTex is a local macOS app for capturing equations from your screen and converting them into LaTeX. It pairs a native SwiftUI interface with local Python OCR workers, rendered previews, copy-ready output, and history.
 
 ## Core Features
 
