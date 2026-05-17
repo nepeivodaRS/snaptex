@@ -6,7 +6,9 @@ import numpy as np
 from PIL import Image
 
 
-CONTENT_SCALE = 0.86
+CONTENT_SCALE = 0.83
+SMALL_ICON_CONTENT_SCALE = 1.0
+SMALL_ICON_MAX_SIZE = 128
 VISIBLE_ALPHA_THRESHOLD = 160
 
 ICON_SPECS = (
@@ -37,7 +39,7 @@ def generate_iconset(source_path, iconset_path, app_icon_png_path=None):
 
 
 def render_icon(icon, size):
-    max_content_size = max(1, int(round(size * CONTENT_SCALE)))
+    max_content_size = max(1, int(round(size * content_scale_for_size(size))))
     scale = min(max_content_size / icon.width, max_content_size / icon.height)
     content_size = (
         max(1, int(round(icon.width * scale))),
@@ -49,6 +51,12 @@ def render_icon(icon, size):
     origin = ((size - content_size[0]) // 2, (size - content_size[1]) // 2)
     canvas.alpha_composite(resized, origin)
     return canvas
+
+
+def content_scale_for_size(size):
+    if size <= SMALL_ICON_MAX_SIZE:
+        return SMALL_ICON_CONTENT_SCALE
+    return CONTENT_SCALE
 
 
 def resize_rgba(image, size):

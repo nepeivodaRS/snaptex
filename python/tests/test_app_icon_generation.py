@@ -49,7 +49,7 @@ class AppIconGenerationTests(unittest.TestCase):
             self.assertLessEqual(bottom, 980)
             self.assertFalse(has_bright_translucent_edge(large_icon))
 
-    def test_repo_logo_generates_without_visible_outer_rim(self):
+    def test_repo_logo_generates_at_normal_app_icon_visual_size(self):
         module = load_icon_module()
 
         with tempfile.TemporaryDirectory() as temporary:
@@ -64,10 +64,31 @@ class AppIconGenerationTests(unittest.TestCase):
             self.assertIsNotNone(bbox)
             left, top, right, bottom = bbox
 
-            self.assertFalse(has_bright_outer_edge(large_icon))
+            self.assertFalse(has_bright_translucent_edge(large_icon))
             self.assertLessEqual(max(right - left, bottom - top) / 1024, 0.87)
             self.assertGreaterEqual(left, 68)
             self.assertGreaterEqual(top, 68)
+
+            switcher_icon = Image.open(iconset / "icon_128x128@2x.png").convert("RGBA")
+            switcher_bbox = switcher_icon.getchannel("A").getbbox()
+            self.assertIsNotNone(switcher_bbox)
+            switcher_left, switcher_top, switcher_right, switcher_bottom = switcher_bbox
+            switcher_occupancy = max(
+                switcher_right - switcher_left,
+                switcher_bottom - switcher_top,
+            ) / switcher_icon.width
+            self.assertGreaterEqual(switcher_occupancy, 0.82)
+            self.assertLessEqual(switcher_occupancy, 0.84)
+
+            for small_name in ("icon_16x16.png", "icon_32x32@2x.png", "icon_128x128.png"):
+                small_icon = Image.open(iconset / small_name).convert("RGBA")
+                small_bbox = small_icon.getchannel("A").getbbox()
+                self.assertIsNotNone(small_bbox)
+                small_left, small_top, small_right, small_bottom = small_bbox
+                self.assertLessEqual(small_left, 1)
+                self.assertLessEqual(small_top, 1)
+                self.assertGreaterEqual(small_right, small_icon.width - 1)
+                self.assertGreaterEqual(small_bottom, small_icon.height - 1)
 
 
 def has_bright_translucent_edge(image):
@@ -77,27 +98,6 @@ def has_bright_translucent_edge(image):
         for x in range(width):
             red, green, blue, alpha = pixels[x, y]
             if 0 < alpha < 48 and min(red, green, blue) > 180:
-                return True
-    return False
-
-
-def has_bright_outer_edge(image):
-    pixels = image.load()
-    width, height = image.size
-    for y in range(1, height - 1):
-        for x in range(1, width - 1):
-            red, green, blue, alpha = pixels[x, y]
-            if alpha == 0 or min(red, green, blue) <= 90:
-                continue
-            if max(red, green, blue) - min(red, green, blue) > 16:
-                continue
-            neighbors = [
-                pixels[x - 1, y][3],
-                pixels[x + 1, y][3],
-                pixels[x, y - 1][3],
-                pixels[x, y + 1][3],
-            ]
-            if min(neighbors) == 0:
                 return True
     return False
 
