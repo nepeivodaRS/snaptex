@@ -12,7 +12,6 @@
   <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-111111">
   <img alt="SwiftPM" src="https://img.shields.io/badge/SwiftPM-ready-f05138">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0f766e">
-  <img alt="OCR: UniMERNet and PaddleOCR" src="https://img.shields.io/badge/OCR-UniMERNet%20%2B%20PaddleOCR-2f6fed">
 </p>
 
 ## Overview
@@ -31,7 +30,7 @@ SnapTex is a local macOS app for capturing equations from your screen and conver
 
 ## Models
 
-SnapTex supports local formula recognition with:
+SnapTex supports the following open-source OCR models:
 
 - [UniMERNet](https://github.com/opendatalab/UniMERNet): [tiny](https://huggingface.co/wanderkid/unimernet_tiny), [small](https://huggingface.co/wanderkid/unimernet_small), and [base](https://huggingface.co/wanderkid/unimernet_base).
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR): [S](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-S), [M](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-M), and [L](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-L).
@@ -129,7 +128,7 @@ python -m pytest python/tests
 
 ## Credits
 
-SnapTex uses [UniMERNet](https://github.com/opendatalab/UniMERNet), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), and [MathJax](https://www.mathjax.org/).
+[UniMERNet](https://github.com/opendatalab/UniMERNet), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [MathJax](https://www.mathjax.org/).
 
 Third-party code and models retain their own licenses.
 
