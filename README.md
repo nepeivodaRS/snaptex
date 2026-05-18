@@ -31,7 +31,7 @@ SnapTex is a local macOS app for capturing equations from your screen and conver
 
 ## Models
 
-SnapTex supports local formula recognition with:
+SnapTex supports the following open-source OCR models:
 
 - [UniMERNet](https://github.com/opendatalab/UniMERNet): [tiny](https://huggingface.co/wanderkid/unimernet_tiny), [small](https://huggingface.co/wanderkid/unimernet_small), and [base](https://huggingface.co/wanderkid/unimernet_base).
 - [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR): [S](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-S), [M](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-M), and [L](https://huggingface.co/PaddlePaddle/PP-FormulaNet_plus-L).
