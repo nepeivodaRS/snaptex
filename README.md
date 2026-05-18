@@ -12,7 +12,6 @@
   <img alt="macOS 13+" src="https://img.shields.io/badge/macOS-13%2B-111111">
   <img alt="SwiftPM" src="https://img.shields.io/badge/SwiftPM-ready-f05138">
   <img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-0f766e">
-  <img alt="OCR: UniMERNet and PaddleOCR" src="https://img.shields.io/badge/OCR-UniMERNet%20%2B%20PaddleOCR-2f6fed">
 </p>
 
 ## Overview
