@@ -83,7 +83,7 @@ python -m pytest python/tests
 
 ## Credits
 
-SnapTex uses [UniMERNet](https://github.com/opendatalab/UniMERNet), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), and [MathJax](https://www.mathjax.org/).
+[UniMERNet](https://github.com/opendatalab/UniMERNet), [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR), [MathJax](https://www.mathjax.org/).
 
 Third-party code and models retain their own licenses.
 
