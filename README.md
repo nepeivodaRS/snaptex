@@ -44,7 +44,7 @@ Requirements:
 - macOS 13 or later.
 - Git.
 - Xcode Command Line Tools.
-- Miniforge, Miniconda, Anaconda, or another `conda` installation.
+- A Conda distribution, such as Miniforge, Miniconda, Anaconda, or another installation that provides a `conda` executable.
 
 1. Install Apple's command line tools if they are not already installed:
 
@@ -52,14 +52,30 @@ Requirements:
    xcode-select --install
    ```
 
-2. Make sure `conda` is available. For example, with Miniforge installed in your home directory:
+2. Make sure `conda` is available:
 
    ```bash
-   ~/miniforge3/bin/conda --version
+   conda --version
    ```
 
-   If that command is not found, install Miniforge, Miniconda, or Anaconda first. If your Conda binary is somewhere custom, use the
-   `CONDA_EXE=/path/to/conda` prefix with the setup command in step 4.
+   If `conda` is not found, install Miniforge with Homebrew:
+
+   ```bash
+   brew install --cask miniforge
+   ```
+
+   Then initialize your shell and restart it:
+
+   ```bash
+   conda init "$(basename "${SHELL}")"
+   ```
+
+   If you do not want to initialize your shell, the SnapTex setup script also checks the common Homebrew Conda paths. If your Conda binary is somewhere custom,
+   use the full path when running the setup command in step 4:
+
+   ```bash
+   CONDA_EXE="/path/to/conda" ./scripts/setup_snaptex_env.sh
+   ```
 
 3. Clone the repository and enter it:
 
