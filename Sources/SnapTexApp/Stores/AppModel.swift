@@ -891,7 +891,7 @@ final class AppModel: ObservableObject {
         let assignedFolderID = folderID ?? activeHistoryFolderID ?? existingEntry?.folderID
         let entry = OCRHistoryEntry(
             id: existingEntry?.id ?? UUID(),
-            title: pendingHistoryTitle,
+            title: replacementTitle(for: existingEntry),
             timestamp: Date(),
             latex: "",
             rawPrediction: "",
@@ -917,6 +917,15 @@ final class AppModel: ObservableObject {
         trimHistoryToLimit()
         selectedHistoryID = entry.id
         return entry.id
+    }
+
+    private func replacementTitle(for existingEntry: OCRHistoryEntry?) -> String {
+        guard let existingEntry,
+              existingEntry.title != defaultHistoryTitle(for: existingEntry.latex) else {
+            return pendingHistoryTitle
+        }
+
+        return existingEntry.title
     }
 
     private func normalizedHistoryScope(_ scope: HistoryScope) -> HistoryScope {

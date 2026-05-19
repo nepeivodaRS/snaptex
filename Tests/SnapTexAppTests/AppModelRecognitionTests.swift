@@ -313,6 +313,36 @@ final class AppModelRecognitionTests: XCTestCase {
         XCTAssertTrue(model.canRetry)
     }
 
+    func testReplacingRenamedHistoryEntryPreservesUserTitle() {
+        let model = AppModel()
+        let entry = OCRHistoryEntry(
+            id: UUID(),
+            title: "x + y",
+            timestamp: Date(),
+            latex: "x + y",
+            rawPrediction: "x + y",
+            alternatives: [],
+            model: .small,
+            mode: .balanced,
+            image: NSImage(size: NSSize(width: 8, height: 8)),
+            imageFingerprint: "selected-image",
+            state: .recognized
+        )
+
+        model.history = [entry]
+        model.renameHistoryEntry(entry, title: "Euler class")
+        let id = model.insertPendingHistoryEntry(
+            image: nil,
+            imageFingerprint: "selected-image",
+            mode: .accurate,
+            model: .base
+        )
+
+        XCTAssertEqual(id, model.history.first?.id)
+        XCTAssertEqual("Euler class", model.history.first?.title)
+        XCTAssertEqual(.recognizing, model.history.first?.state)
+    }
+
     func testReopeningHistoryEntryTracksDisplayedModel() {
         let model = AppModel()
         let entry = OCRHistoryEntry(

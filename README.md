@@ -52,7 +52,7 @@ Requirements:
    xcode-select --install
    ```
 
-2. Make sure `conda` is available:
+2. Make sure Conda is available.
 
    ```bash
    conda --version
@@ -64,17 +64,16 @@ Requirements:
    brew install --cask miniforge
    ```
 
-   Then initialize your shell and restart it:
+   Then open a new terminal and try the commands above again. You can also initialize your shell and restart it:
 
    ```bash
    conda init "$(basename "${SHELL}")"
    ```
 
-   If you do not want to initialize your shell, the SnapTex setup script also checks the common Homebrew Conda paths. If your Conda binary is somewhere custom,
-   use the full path when running the setup command in step 4:
+   SnapTex usually detects common Conda installs automatically. If your Conda installation is in a custom location, export its absolute path before running the setup script:
 
    ```bash
-   CONDA_EXE="/path/to/conda" ./scripts/setup_snaptex_env.sh
+   export CONDA_EXE="$(conda info --base)/bin/conda"
    ```
 
 3. Clone the repository and enter it:
@@ -96,6 +95,14 @@ Requirements:
    ~/Library/Application Support/snaptex/UniMERNet
    ```
 
+   Verify that the environment Python exists:
+
+   ```bash
+   conda run -n snaptex python --version
+   ```
+
+   The setup script prints the Python path it created. It should end with `envs/snaptex/bin/python` under your Conda install root.
+
    To choose a different default UniMERNet model size during setup:
 
    ```bash
@@ -108,20 +115,15 @@ Requirements:
 5. Build, install, and launch SnapTex:
 
    ```bash
-   ./scripts/build_and_run.sh
-   ```
-
-   The script builds the Swift app, creates an app bundle, installs it at `/Applications/snaptex.app`, verifies the code signature, and opens the app.
-
-6. If you do not have a local signing identity yet, use an ad-hoc development build:
-
-   ```bash
    SNAPTEX_ALLOW_ADHOC_SIGNING=1 ./scripts/build_and_run.sh
    ```
 
+   The script builds the Swift app, creates an app bundle, installs it at `/Applications/snaptex.app`, verifies the code signature, and opens the app.
+   `SNAPTEX_ALLOW_ADHOC_SIGNING=1` is the recommended source-build path for users who do not have a local code-signing identity.
    Ad-hoc signing is useful for local testing, but macOS may ask you to re-grant permissions after rebuilds.
 
-7. On first use, grant any macOS permissions SnapTex requests, such as Screen Recording for capturing equation regions. If permission changes, quit and reopen SnapTex.
+6. On first use, grant any macOS permissions SnapTex requests, such as Screen Recording for capturing equation regions. If permission changes, quit and reopen SnapTex.
+   The first recognition after launching SnapTex can take longer because the OCR worker initializes and loads the selected model; later recognitions are faster.
 
 The installed app is:
 
@@ -132,8 +134,36 @@ The installed app is:
 To verify that the installed app launches:
 
 ```bash
-./scripts/build_and_run.sh --verify
+SNAPTEX_ALLOW_ADHOC_SIGNING=1 ./scripts/build_and_run.sh --verify
 ```
+
+If SnapTex reports `Conda environment Python was not found at /envs/snaptex/bin/python`, reset the saved app settings and relaunch with `CONDA_EXE` set to the absolute Conda path:
+
+```bash
+defaults delete dev.snaptex.app AppSettingsSnapshot 2>/dev/null || true
+export CONDA_EXE="$(conda info --base)/bin/conda"
+SNAPTEX_ALLOW_ADHOC_SIGNING=1 ./scripts/build_and_run.sh
+```
+
+## Uninstall
+
+To fully remove a source-built SnapTex installation:
+
+```bash
+osascript -e 'quit app "snaptex"' 2>/dev/null || true
+sudo rm -rf /Applications/snaptex.app
+rm -rf "$HOME/Library/Application Support/snaptex"
+defaults delete dev.snaptex.app 2>/dev/null || true
+conda env remove -n snaptex
+```
+
+If `conda` is not available in your shell, use the absolute Conda path from the install guide:
+
+```bash
+"$CONDA_EXE" env remove -n snaptex
+```
+
+If you built SnapTex with a custom `SNAPTEX_BUNDLE_ID`, replace `dev.snaptex.app` with that bundle identifier in the `defaults delete` command.
 
 ## Development
 
